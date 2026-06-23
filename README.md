@@ -136,8 +136,8 @@ Permite ingresar condiciones climáticas y topográficas de una celda patagónic
 
 ## Autores
 
-- Juan — UCA Rosario, Licenciatura en Ciencias de Datos
-- [Integrante 2]
+- Juan Chocobares — UCA Rosario, Licenciatura en Ciencias de Datos
+- Agustín Formenti — UCA Rosario, Licenciatura en Ciencias de Datos
 - [Integrante 3]
 
 ---
