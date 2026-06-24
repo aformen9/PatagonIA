@@ -1,0 +1,45 @@
+# Datos crudos — archivos grandes, no versionar
+data/raw/
+data/static/
+*.nc
+*.nc4
+*.tif
+*.tiff
+*.hdf
+*.h5
+
+# El dataset procesado SÍ se versiona (es el entregable compartido)
+!data/processed/patagonia_dataset.csv
+
+# Modelos serializados (pesados)
+ia/models/*.joblib
+ia/models/*.pkl
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv/
+env/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+
+# Credenciales API — NUNCA commitear
+.cdsapirc
+.netrc
+api_keys.txt
+secrets.env
+*.key
