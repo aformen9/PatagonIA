@@ -1,17 +1,30 @@
-# PatagonIA 
+# PatagonIA
 
-> Sistema de predicción de riesgo de incendios forestales en la Patagonia argentina  
+> Análisis de patrones ambientales e incendios forestales en la Patagonia Argentina  
 > usando datos satelitales públicos y reanálisis climático.
 
-**Argumento central:** alternativa interpretable sobre datos tabulares de libre acceso frente a enfoques de deep learning con imágenes satelitales costosas. Replicable sin infraestructura costosa, orientada a decisiones a escala regional en contexto argentino.
+**Licenciatura en Ciencias de Datos · UCA Rosario · 2026**  
+Materia A: *Minería de Datos y Big Data* · Materia B: *IA y Aprendizaje Automático 1*
 
 ---
 
-## Descripción
+## Descripción general
 
-PatagonIA construye un dataset geoespacial de celdas 25km × 25km para la región patagónica (lat [-55, -37], lon [-73, -62]) integrando cinco fuentes de datos públicas. Sobre ese dataset entrena modelos de regresión (predicción de focos a 7 días) y clasificación binaria (riesgo alto/bajo), con énfasis en interpretabilidad y reproducibilidad.
+PatagonIA construye un dataset geoespacial de celdas 25km × 25km sobre la Patagonia Argentina
+(lat [-55, -37], lon [-73, -62]) integrando cinco fuentes de datos públicas.
 
-El proyecto fue desarrollado como trabajo final de la materia **IA y Aprendizaje Automático 1** — Licenciatura en Ciencias de Datos, UCA Rosario (2026).
+Ese dataset es el punto de partida compartido para dos trabajos académicos con enfoques distintos:
+
+| | Minería de Datos y Big Data | IA y Aprendizaje Automático 1 |
+|---|---|---|
+| **Pregunta** | ¿Qué perfiles ambientales caracterizan zonas con focos? | ¿Puedo predecir si habrá un foco en 7 días? |
+| **Enfoque** | No supervisado — descubrimiento de patrones | Supervisado — regresión y clasificación |
+| **Técnicas** | K-Means + Apriori (KNIME) | Ridge, RF, XGBoost, ensamble (sklearn) |
+| **Variable target** | No entra como input del modelo | `foco_presente` es el label |
+| **Entregable** | `.knwf` + paper académico PDF | Notebooks + app Streamlit + paper IEEE |
+| **Carpeta** | `mineria/` | `ia/` |
+
+El pipeline de construcción del dataset (`pipeline/`) es neutral — no pertenece a ninguna materia.
 
 ---
 
@@ -19,11 +32,11 @@ El proyecto fue desarrollado como trabajo final de la materia **IA y Aprendizaje
 
 | Fuente | Contenido | Acceso |
 |--------|-----------|--------|
-| NASA FIRMS VIIRS | Focos de calor históricos (375m, 2010–2023) | CSV gratuito, confidence ≥ 50% |
-| ERA5 / Copernicus CDS | Temperatura, humedad, viento, precipitación diaria | API `cdsapi`, NetCDF |
-| SRTM / NASADEM | Elevación del terreno (30m) | GeoTIFF, earthdata.nasa.gov |
-| ESA WorldCover 2021 | Cobertura vegetal dominante por celda | GeoTIFF, esa-worldcover.org |
-| IGN Argentina | Red vial nacional | Shapefile, datos.gob.ar |
+| [NASA FIRMS VIIRS](https://firms.modaps.eosdis.nasa.gov/) | Focos de calor históricos (375m) | CSV gratuito |
+| [ERA5 / Copernicus CDS](https://cds.climate.copernicus.eu/) | Temperatura, humedad, viento, precipitación | API `cdsapi` |
+| [SRTM / NASADEM](https://earthdata.nasa.gov/) | Elevación del terreno (30m) | GeoTIFF |
+| [ESA WorldCover 2021](https://esa-worldcover.org/) | Cobertura vegetal dominante | GeoTIFF |
+| [IGN Argentina](https://datos.gob.ar/) | Red vial nacional | Shapefile |
 
 ---
 
@@ -31,114 +44,96 @@ El proyecto fue desarrollado como trabajo final de la materia **IA y Aprendizaje
 
 ```
 PatagonIA/
-├── data/
-│   ├── raw/          # FIRMS CSV por año, ERA5 NetCDF por bloque (no versionados)
-│   ├── processed/    # Dataset final en parquet (no versionado)
-│   └── static/       # GeoTIFF elevación/cobertura, shapefile rutas (no versionados)
-├── notebooks/
+├── pipeline/               ← construcción del dataset (compartido entre materias)
 │   ├── 01_descarga_firms.ipynb
 │   ├── 02_descarga_era5.ipynb
 │   ├── 03_join_grilla.ipynb
-│   ├── 04_features_engineering.ipynb
-│   ├── 05_eda_tp1.ipynb
-│   ├── 06_regresion_tp2.ipynb
-│   └── 07_clasificacion_tp3.ipynb
-├── app/
-│   ├── app.py
-│   ├── model_pipeline.joblib
-│   └── stats_historicas.parquet
-├── models/           # Pipelines serializados (.joblib)
-├── reports/          # Informes PDF de cada TP
+│   └── 04_features_engineering.ipynb
+│
+├── mineria/                ← Minería de Datos y Big Data (entrega: junio 2026)
+│   ├── README.md
+│   ├── knime/              ← workflow .knwf (entregable oficial)
+│   ├── notebooks/          ← EDA exploratorio previo a KNIME
+│   └── report/             ← paper académico PDF + figuras
+│
+├── ia/                     ← IA y Aprendizaje Automático 1 (entrega: julio 2026)
+│   ├── README.md
+│   ├── notebooks/          ← TPs 1-4
+│   ├── app/                ← Streamlit deploy
+│   ├── models/             ← pipelines serializados (.joblib)
+│   └── reports/            ← informes PDF por TP
+│
+├── data/
+│   ├── raw/                ← datos crudos por fuente (no versionados)
+│   ├── processed/          ← patagonia_dataset.csv (versionado)
+│   └── static/             ← GeoTIFFs y shapefiles estáticos (no versionados)
+│
 ├── requirements.txt
-├── CONTRIBUTING.md
+├── .gitignore
 └── README.md
 ```
 
 ---
 
-## Instalación y reproducción
-
-### 1. Clonar el repositorio
+## Instalación
 
 ```bash
 git clone https://github.com/TU_USUARIO/PatagonIA.git
 cd PatagonIA
-```
-
-### 2. Crear entorno virtual e instalar dependencias
-
-```bash
 python -m venv .venv
 source .venv/bin/activate        # Linux / macOS
 .venv\Scripts\activate           # Windows
-
 pip install -r requirements.txt
 ```
 
-### 3. Configurar credenciales de APIs
+### Credenciales necesarias
 
-**ERA5 / Copernicus CDS:**  
-Crear cuenta en https://cds.climate.copernicus.eu y generar una API key.  
+**ERA5 / Copernicus CDS** — crear cuenta en https://cds.climate.copernicus.eu  
 Guardar en `~/.cdsapirc`:
-
 ```
 url: https://cds.climate.copernicus.eu/api/v2
 key: TU_UID:TU_API_KEY
 ```
 
-**NASA Earthdata (SRTM):**  
-Crear cuenta en https://urs.earthdata.nasa.gov y guardar credenciales en `~/.netrc`:
-
+**NASA Earthdata (SRTM)** — crear cuenta en https://urs.earthdata.nasa.gov  
+Guardar en `~/.netrc`:
 ```
 machine urs.earthdata.nasa.gov login TU_USUARIO password TU_PASSWORD
 ```
 
-### 4. Ejecutar notebooks en orden
+---
 
+## Ejecutar el pipeline de datos
+
+```bash
+# Ejecutar en orden — cada notebook depende del anterior
+jupyter lab pipeline/01_descarga_firms.ipynb
+jupyter lab pipeline/02_descarga_era5.ipynb
+jupyter lab pipeline/03_join_grilla.ipynb
+jupyter lab pipeline/04_features_engineering.ipynb
 ```
-01 → 02 → 03 → 04 → 05 → 06 → 07
-```
 
-Los notebooks 01 y 02 descargan los datos crudos. El notebook 03 construye la grilla y hace los joins. Los siguientes realizan feature engineering, EDA y modelado.
-
->  Los archivos de datos (`data/`) no están versionados por su tamaño. Ver `.gitignore`.
+Output final: `data/processed/patagonia_dataset.csv`
 
 ---
 
-## Decisiones metodológicas clave
+## Decisiones metodológicas del dataset
 
-- **Split temporal estricto:** train < 2022, test ≥ 2022. Nunca aleatorio.
-- **Anti-leakage en rolling windows:** todas las ventanas temporales aplican `shift(1)` sobre la celda antes del cálculo.
-- **Desbalance de clases (~90/10):** tratado con `class_weight='balanced'`. Métricas: F1, AUC-ROC, AUC-PR. Accuracy descartada.
-- **Pipeline sklearn obligatorio:** scaler + encoder + modelo en un único objeto serializado con joblib.
-- **Grilla 25km:** justificada por la resolución nativa de ERA5 (~28km).
-
----
-
-## Estructura de TPs
-
-| TP | Período | Contenido |
-|----|---------|-----------|
-| TP1 | 2–15 jun | EDA y preparación de datos |
-| TP2 | 16–22 jun | Regresión (Ridge, RF, XGBoost) |
-| TP3 | 23–29 jun | Clasificación + Clustering + Ensamble |
-| TP4 | 30 jun–6 jul | Deploy Streamlit + Paper IEEE |
-
----
-
-## App
-
-La app está disponible en: `https://TU_APP.streamlit.app` *(disponible desde julio 2026)*
-
-Permite ingresar condiciones climáticas y topográficas de una celda patagónica y obtener una predicción de riesgo de incendio con los factores más influyentes.
+- **Grilla 25km:** justificada por la resolución nativa de ERA5 (~28km)
+- **Región:** Patagonia Argentina — lat [-55, -37], lon [-73, -62]
+- **Período:** 2019–2023 (5 años, ~1.100–1.400 celdas)
+- **Confianza FIRMS:** filtro confidence ≥ 50% para reducir falsos positivos
+- **Desbalance de clases:** ~90% celdas sin foco, ~10% con foco — tratado distinto en cada materia
 
 ---
 
 ## Autores
 
-- Juan Chocobares — UCA Rosario, Licenciatura en Ciencias de Datos
-- Agustín Formenti — UCA Rosario, Licenciatura en Ciencias de Datos
-- [Integrante 3]
+| Nombre | GitHub |
+|--------|--------|
+| Agustín Formenti | [@TU_USUARIO](https://github.com/TU_USUARIO) |
+| Juan Chocobares | [@choco721](https://github.com/choco721) |
+| Javier (integrante 3) | — |
 
 ---
 
