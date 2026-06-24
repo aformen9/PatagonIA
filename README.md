@@ -131,9 +131,8 @@ Output final: `data/processed/patagonia_dataset.csv`
 
 | Nombre | GitHub |
 |--------|--------|
-| Agustín Formenti | [@TU_USUARIO](https://github.com/TU_USUARIO) |
-| Juan Chocobares | [@choco721](https://github.com/choco721) |
-| Javier (integrante 3) | — |
+| Agustín Formenti | 
+| Juan Chocobares | 
 
 ---
 
