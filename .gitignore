@@ -33,6 +33,10 @@ venv/
 .idea/
 *.swp
 
+# Claude Code — configuración e instrucciones personales (no compartir)
+.claude/
+CLAUDE.local.md
+
 # macOS / Windows
 .DS_Store
 Thumbs.db
@@ -43,3 +47,6 @@ Thumbs.db
 api_keys.txt
 secrets.env
 *.key
+
+# model_context
+model_context/
