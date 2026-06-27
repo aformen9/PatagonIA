@@ -31,10 +31,11 @@ El pipeline de construcción del dataset (`notebooks/01` a `05`) es neutral — 
 
 | Fuente | Contenido | Acceso |
 |--------|-----------|--------|
-| [NASA FIRMS VIIRS](https://firms.modaps.eosdis.nasa.gov/) | Focos de calor históricos 2010-2023 (375m) | API key gratuita |
+| [NASA FIRMS VIIRS](https://firms.modaps.eosdis.nasa.gov/) | Focos de calor históricos 2012-2023 (375m) | API key gratuita |
 | [GFS hindcast (NOAA)](https://nomads.ncep.noaa.gov/) | Temperatura, humedad, viento, precipitación — training Y anomalías | Librería `herbie-data` |
 | [ECMWF IFS](https://open-meteo.com/en/docs/ecmwf-api) | Variables meteorológicas para producción (9km) | API REST sin cuenta |
 | [SRTM / NASADEM](https://earthdata.nasa.gov/) | Elevación del terreno (30m) | GeoTIFF — cuenta NASA Earthdata |
+| [NASA POWER Climatology](https://power.larc.nasa.gov/) | Normales climáticas 1981-2020 (temp, precip, viento, humedad) | API REST sin cuenta |
 | [ESA WorldCover 2021](https://esa-worldcover.org/) | Cobertura vegetal dominante | GeoTIFF descarga directa |
 | [IGN Argentina](https://datos.gob.ar/dataset/ign) | Rutas y asentamientos | Shapefile descarga directa |
 
@@ -131,10 +132,10 @@ Output final: `data/processed/patagonia_dataset_final.parquet`
 
 ## Dataset
 
-Cada fila = hexágono H3 × fecha. ~15 millones de filas (2010-2023).
+Cada fila = hexágono H3 × fecha. ~15 millones de filas (2012-2023).
 
-- **Región**: Patagonia Argentina — lat [-56, -36], lon [-76, -62]
-- **Período**: 2010-2023
+- **Región**: Patagonia Argentina — lat [-56, -38], lon [-76, -62]
+- **Período**: 2012-2023
 - **Grilla**: H3 resolución 5, ~3.200 hexágonos burnables
 - **Confianza FIRMS**: filtro confidence ≥ 50%
 - **Desbalance de clases**: ~90% sin foco, ~10% con foco
@@ -146,9 +147,9 @@ Cada fila = hexágono H3 × fecha. ~15 millones de filas (2010-2023).
 | Nombre | Rol |
 |--------|-----|
 | Agustín Formenti | IA y ML + Minería de Datos |
-| Juan Chocobares | IA y ML + Minería de Datos |
-| Andi | IA y ML + Minería de Datos |
-| Lolo | Minería de Datos |
+| Juan Cruz Chocobares | IA y ML + Minería de Datos |
+| Andrés Morenico | IA y ML + Minería de Datos |
+| Lorenzo Mendes | Minería de Datos |
 
 ---
 

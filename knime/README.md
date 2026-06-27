@@ -120,15 +120,18 @@ En KNIME:
 1. Usar un loop (`Chunk Loop Start` → `K-Means` → `Chunk Loop End`) con k variando, O
 2. Más simple: correr K-Means con k=3, 4, 5 por separado y comparar el score.
 
-**k recomendado para este dataset: 4 o 5.**
-Justificación: hay al menos 4 perfiles ambientales reconocibles en la Patagonia:
-- Zona andina húmeda (bosque, alta precip, alta elevación)
-- Estepa seca (matorral/pastizal, baja precip, viento alto)
-- Zona costera / litoral
-- Zona norpatagónica (más cálida, más cerca de asentamientos)
+**k usado en el proyecto final: 3.**
+Justificación: la Patagonia presenta tres perfiles ambientales cualitativamente distintos
+y validables contra el conocimiento geográfico previo:
+- Zona andina húmeda (bosque, alta precip, alta elevación) — bajo riesgo
+- Estepa transicional (matorral/pastizal, precip media) — riesgo moderado
+- Estepa árida pirofílica (baja precip, alta temp, baja elevación) — alto riesgo
+
+Los tres clusters resultantes son interpretables geográficamente y coinciden con
+el perfil de riesgo documentado por Kitzberger et al. (2016).
 
 **Nodo:** `K-Means`
-- Número de clusters: empezar con **4**, verificar con 5
+- Número de clusters: **3**
 - Distance: Euclidean
 - Max iterations: 200
 - Columnas: **solo las normalizadas numéricas** (excluir `cobertura_veg`, `mes_pico`)
@@ -169,7 +172,7 @@ Variables a discretizar y rangos sugeridos:
 
 | Variable | Nro. bins | Etiquetas sugeridas |
 |---|---|---|
-| `n_focos` | 3 | bajo (<20), medio (20-150), alto (>150) |
+| `n_focos` | 3 | foco_bajo (<20), foco_medio (20-150), foco_alto (>150) |
 | `temp_media` | 3 | fría (<5°C), templada (5-13°C), cálida (>13°C) |
 | `precip_anual` | 3 | seca (<300mm), semi (<600mm), húmeda (>600mm) |
 | `viento_medio` | 2 | moderado (<5 m/s), fuerte (≥5 m/s) |
@@ -177,8 +180,9 @@ Variables a discretizar y rangos sugeridos:
 | `dist_asentamiento_km` | 2 | cercano (<50 km), lejano (≥50 km) |
 | `elevacion` | 3 | baja (<200m), media (200-800m), alta (>800m) |
 
-**Nodo:** `Auto-Binner` (uno por variable, o usar `Equal Frequency Binner` si se
-prefiere que cada bin tenga la misma cantidad de filas).
+**Nodo:** `Numeric Binner` — configurar una variable por pestaña dentro del mismo nodo.
+Las etiquetas de `n_focos` se nombran `foco_bajo/foco_medio/foco_alto` (con prefijo)
+para evitar ambigüedad con las etiquetas de `elevacion` (`baja/media/alta`).
 
 `cobertura_veg` y `mes_pico` ya son categóricas, se usan directo.
 
@@ -191,7 +195,11 @@ prefiere que cada bin tenga la misma cantidad de filas).
   - Min support: **0.10** (un patrón debe aparecer en al menos 10% de las zonas = 198 zonas)
   - Min confidence: **0.60** (la regla debe cumplirse en el 60% de los casos)
   - Max antecedent length: 3 (hasta 3 condiciones en el antecedente)
-- **Consecuente de interés:** `n_focos=alto` (el ítem que queremos predecir)
+- **Consecuente de interés:** ninguno forzado. Con soporte 0.10, `foco_alto`
+  aparece principalmente en **antecedentes** (328/1.980 zonas = 16,6% con foco_alto,
+  lo que limita su aparición como consecuente en reglas conjuntas). Las reglas
+  más relevantes tienen la forma `{foco_alto, seca} ⇒ calida` — se presentan como
+  co-ocurrencia, no como predicción causal.
 
 **Por qué estos valores de soporte y confianza:**
 - Soporte 0.10: en 1.980 zonas, un patrón con soporte 5% = 99 zonas, que es
@@ -201,14 +209,16 @@ prefiere que cada bin tenga la misma cantidad de filas).
 
 ---
 
-### 11. Rule Filter
+### 11. Row Filter
 
-- **Nodo:** `Rule Filter` o filtrar la tabla de reglas con `Row Filter`
-- Condiciones:
-  - `lift > 1.2` (la regla mejora al menos un 20% sobre el azar)
-  - consecuente = `n_focos=alto`
-- **Para el informe:** reportar las 5 reglas con mayor lift. Ejemplo esperado:
-  `{matorral, viento=fuerte, humedad=seca} → n_focos=alto` con lift ~2.x
+- **Nodo:** `Row Filter` (sobre la tabla de reglas generada por Apriori)
+- Condición: `lift ≥ 1.2` (la regla mejora al menos un 20% sobre el azar)
+- **Resultado del proyecto:** 184 reglas filtradas con lift ≥ 1.2.
+- **Para el informe:** reportar las reglas con mayor lift, en particular las que
+  incluyen `foco_alto` en antecedente. Las tres más relevantes:
+  - `{foco_alto, seca} ⇒ calida` (lift 2.031, confianza 0.965)
+  - `{foco_alto, baja_elevacion} ⇒ calida` (lift 2.052, confianza 0.975)
+  - `{calida, foco_alto} ⇒ baja_elevacion` (lift 2.052, confianza 0.731)
 
 ---
 
@@ -252,9 +262,10 @@ clusters según n_focos casi exclusivamente.
 
 **¿Por qué support=0.10 en Apriori?**
 Con 1.980 zonas, support 10% = 198 zonas mínimas para que el patrón sea considerado.
-Un valor más bajo (ej. 2%) generaría miles de reglas triviales o específicas a
-situaciones anecdóticas. Un valor más alto (ej. 25%) podría eliminar patrones
-reales de zonas de alto riesgo (que son minoría).
+Un valor más bajo (ej. 2%) generaría miles de reglas triviales o anecdóticas.
+Un valor más alto (ej. 25%) eliminaría patrones reales de zonas de alto riesgo
+(foco_alto = 16,6% de las zonas). Se probó soporte 0.05 como análisis de
+sensibilidad — aparece una única regla adicional con foco_alto como consecuente.
 
 **¿Qué es el lift y por qué filtramos lift > 1?**
 Lift = confianza(regla) / soporte(consecuente). Si lift = 1, la regla no aporta
