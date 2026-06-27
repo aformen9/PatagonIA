@@ -8,6 +8,11 @@ data/static/
 *.hdf
 *.h5
 
+# Intermedios del pipeline — reproducibles, no versionar
+data/processed/_intermedios/
+data/processed/*.parquet
+data/processed/_mineria_fire.parquet
+
 # El dataset procesado SÍ se versiona (es el entregable compartido)
 !data/processed/patagonia_dataset.csv
 
@@ -50,3 +55,7 @@ secrets.env
 
 # model_context
 model_context/
+
+# knime — el .knwf y las imágenes de resultados SÍ se versionan
+knime/.metadata/
+knime/results_knime/.metadata/
