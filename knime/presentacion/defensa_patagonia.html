@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Defensa PatagonIA · Minería de Datos</title>
+<!--
+  Presentación de defensa oral del Trabajo Final de Minería de Datos (PatagonIA).
+  Implementación standalone del diseño "Defensa PatagonIA.dc.html" (Claude Design):
+  mismas 10 diapositivas, sin runtime propietario. Sólo HTML + CSS + un script
+  mínimo de navegación. Se abre en cualquier navegador (no requiere servidor).
+
+  Controles:
+    →  /  ↓  /  Espacio  /  click ............ siguiente diapositiva
+    ←  /  ↑  ............................... diapositiva anterior
+    F ..................................... pantalla completa
+    N ..................................... mostrar / ocultar notas del orador
+    Inicio / Fin ......................... primera / última diapositiva
+
+  Las diapositivas están diseñadas a 1920×1080 y se escalan para encajar en la
+  pantalla manteniendo la proporción 16:9.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; background:#0A1326; height:100%; }
+  * { box-sizing:border-box; }
+
+  /* Escenario: centra y escala la diapositiva 1920×1080 al viewport. */
+  #stage {
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+  }
+  #frame {
+    width:1920px; height:1080px;
+    transform-origin:center center;
+    position:relative;
+    box-shadow:0 30px 80px rgba(0,0,0,0.45);
+  }
+  /* Cada diapositiva ocupa el frame completo; sólo se ve la activa. */
+  #frame > section {
+    width:1920px; height:1080px;
+    position:absolute; inset:0;
+    display:none;
+  }
+  #frame > section.active { display:flex; }
+
+  /* Imágenes reales de KNIME insertadas en los marcos de la maqueta. */
+  .imgframe {
+    border:1.5px solid rgba(244,239,230,0.18) !important;
+    background:rgba(244,239,230,0.03) !important;
+    background-image:none !important;
+    overflow:hidden; padding:14px !important;
+  }
+  .imgframe img { width:100%; height:100%; object-fit:contain; border-radius:3px; }
+
+  /* Imágenes ampliables: cursor de lupa. */
+  .zoomable { cursor:zoom-in; }
+
+  /* Lightbox: imagen a pantalla completa con el fondo difuminado.
+     Vive fuera del #frame escalado, así ocupa todo el viewport real. */
+  #lightbox {
+    position:fixed; inset:0; z-index:100; display:none;
+    align-items:center; justify-content:center; padding:3vmin;
+    background:rgba(8,16,33,0.78); cursor:zoom-out;
+    backdrop-filter:blur(16px) saturate(0.9);
+    -webkit-backdrop-filter:blur(16px) saturate(0.9);
+  }
+  #lightbox.show { display:flex; }
+  #lightbox img {
+    max-width:94vw; max-height:92vh; width:auto; height:auto; border-radius:8px;
+    border:1px solid rgba(244,239,230,0.14); box-shadow:0 24px 80px rgba(0,0,0,0.55);
+  }
+  #lightbox .hint {
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    font-family:'JetBrains Mono', monospace; font-size:14px; letter-spacing:0.08em;
+    text-transform:uppercase; color:rgba(244,239,230,0.6); pointer-events:none;
+  }
+
+  /* HUD: contador de diapositivas. */
+  #hud {
+    position:fixed; bottom:18px; right:22px; z-index:50;
+    font-family:'JetBrains Mono', monospace; font-size:14px; letter-spacing:0.08em;
+    color:rgba(244,239,230,0.5); background:rgba(10,19,38,0.6);
+    padding:6px 12px; border-radius:999px; border:1px solid rgba(244,239,230,0.12);
+    user-select:none;
+  }
+  #hud b { color:#E8843C; font-weight:500; }
+
+  /* Notas del orador (overlay, tecla N). */
+  #notes {
+    position:fixed; left:0; right:0; bottom:0; z-index:60;
+    max-height:42vh; overflow:auto; display:none;
+    background:rgba(10,19,38,0.96); border-top:2px solid #E8843C;
+    color:#F4EFE6; font-family:'Manrope', sans-serif; font-size:18px; line-height:1.5;
+    padding:24px 40px 28px;
+  }
+  #notes.show { display:block; }
+  #notes .tag {
+    font-family:'JetBrains Mono', monospace; font-size:13px; letter-spacing:0.16em;
+    text-transform:uppercase; color:#E8843C; margin-bottom:10px;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="frame">
+
+  <!-- ════════ SLIDE 1 · PORTADA ════════ -->
+  <section data-screen-label="01 Portada" data-speaker-notes="Apertura (0:30). Presentar título, equipo y materia. Gancho: aplicamos el proceso KDD completo en KNIME para descubrir qué perfil ambiental tienen las zonas que más se incendian en la Patagonia." style="background:#0F1E3D; color:#F4EFE6; font-family:'Manrope',sans-serif; padding:96px 110px 84px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.055; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%23F4EFE6' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <img src="mapa_h3.png" alt="" aria-hidden="true" style="position:absolute; top:50%; right:-70px; transform:translateY(-50%); height:128%; width:auto; opacity:0.20; pointer-events:none;">
+    <div style="position:relative; display:flex; flex:1; align-items:center;">
+      <div style="flex:1.25; display:flex; flex-direction:column; justify-content:center;">
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom:40px;">
+          <span style="width:13px; height:15px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.2em; color:rgba(244,239,230,0.6);">Proyecto PatagonIA</span>
+        </div>
+        <h1 style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:60px; line-height:1.06; letter-spacing:-0.02em; margin:0; color:#F4EFE6; max-width:18ch; text-wrap:balance;">Caracterización de zonas de riesgo de incendios forestales en la Patagonia argentina</h1>
+        <p style="font-family:'Space Grotesk',sans-serif; font-weight:400; font-size:30px; line-height:1.3; margin:26px 0 0; color:#E8843C; letter-spacing:-0.01em;">mediante minería de datos</p>
+        <div style="height:1px; background:rgba(244,239,230,0.18); margin:48px 0 32px; max-width:560px;"></div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px 28px; max-width:620px;">
+          <span style="font-size:24px; font-weight:500; color:#F4EFE6;">Agustín Formenti</span>
+          <span style="font-size:24px; font-weight:500; color:#F4EFE6;">Andrés Morenico</span>
+          <span style="font-size:24px; font-weight:500; color:#F4EFE6;">Lorenzo Mendes</span>
+          <span style="font-size:24px; font-weight:500; color:#F4EFE6;">Juan Cruz Chocobares</span>
+        </div>
+        <p style="font-family:'JetBrains Mono',monospace; font-size:18px; letter-spacing:0.04em; margin:34px 0 0; color:rgba(244,239,230,0.55);">Minería de Datos y Big Data — UCA Rosario · 2026</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ SLIDE 2 · EL PROBLEMA ════════ -->
+  <section data-screen-label="02 Problema" data-speaker-notes="1:30. Por qué importa: los incendios son el principal vector de perturbación de los ecosistemas patagónicos; >95% de los focos son antrópicos (SNMF). Mostrar la pregunta analítica literal. Por qué minería y no modelo predictivo: no hay etiqueta a predecir, queremos que los patrones emerjan de los datos." style="background:#0F1E3D; color:#F4EFE6; font-family:'Manrope',sans-serif; padding:88px 110px 80px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.04; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%23F4EFE6' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <div style="position:relative; display:flex; align-items:center; gap:14px; margin-bottom:30px;">
+      <span style="width:11px; height:13px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(244,239,230,0.55);">02 · El problema</span>
+    </div>
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:60px; line-height:1.02; letter-spacing:-0.015em; margin:0 0 44px; color:#F4EFE6;">Un fuego de origen humano</h2>
+    <div style="position:relative; display:flex; gap:80px; flex:1; align-items:center;">
+      <div style="flex:1;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:188px; line-height:0.9; letter-spacing:-0.04em; color:#E8843C;">+95<span style="font-size:96px; vertical-align:0.32em;">%</span></div>
+        <p style="font-size:30px; line-height:1.4; font-weight:400; margin:24px 0 0; max-width:20ch; color:rgba(244,239,230,0.88);">de los incendios patagónicos son de <strong style="font-weight:600; color:#F4EFE6;">origen humano</strong> <span style="color:rgba(244,239,230,0.5);">(SNMF)</span></p>
+      </div>
+      <div style="flex:1.05; display:flex; flex-direction:column; gap:40px;">
+        <div style="background:rgba(244,239,230,0.05); border:1px solid rgba(244,239,230,0.13); border-radius:8px; padding:42px 44px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:17px; letter-spacing:0.18em; text-transform:uppercase; color:#E8843C;">Pregunta analítica</span>
+          <p style="font-family:'Space Grotesk',sans-serif; font-weight:500; font-size:31px; line-height:1.34; margin:20px 0 0; color:#F4EFE6;">¿Qué perfiles ambientales caracterizan las zonas con mayor actividad histórica de incendios?</p>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:16px;">
+          <span style="width:12px; height:14px; background:rgba(244,239,230,0.4); clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); flex-shrink:0; margin-top:8px;"></span>
+          <p style="font-size:26px; line-height:1.4; font-weight:400; margin:0; color:rgba(244,239,230,0.82);">Enfoque inductivo y no supervisado: los patrones <strong style="font-weight:600; color:#F4EFE6;">emergen de los datos</strong>, sin etiqueta a predecir.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ SLIDE 3 · EL DATASET ════════ -->
+  <section data-screen-label="03 Dataset" data-speaker-notes="2:00. Dataset ad-hoc con 5 fuentes públicas y citables, ninguna vista en clase. 1.980 hexágonos x 22 variables, 0 faltantes (supera el mínimo de la consigna). Unidad de análisis = zona (hexágono H3 res 5, ~253 km2). H3: distancia uniforme a los 6 vecinos + resolución alineada con la meteo." style="background:#0F1E3D; color:#F4EFE6; font-family:'Manrope',sans-serif; padding:88px 110px 80px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.04; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%23F4EFE6' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <div style="position:relative; display:flex; align-items:center; gap:14px; margin-bottom:30px;">
+      <span style="width:11px; height:13px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(244,239,230,0.55);">03 · El dataset</span>
+    </div>
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:60px; line-height:1.02; letter-spacing:-0.015em; margin:0 0 40px; color:#F4EFE6;">Un dataset geoespacial construido ad-hoc</h2>
+    <div style="position:relative; display:flex; gap:72px; flex:1; min-height:0;">
+      <div style="flex:1.15; display:flex; flex-direction:column; justify-content:center;">
+        <div style="display:flex; gap:56px; margin-bottom:38px;">
+          <div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:84px; line-height:0.92; letter-spacing:-0.03em; color:#F4EFE6;">1.980</div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:17px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(244,239,230,0.55); margin-top:10px;">hexágonos</div>
+          </div>
+          <div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:84px; line-height:0.92; letter-spacing:-0.03em; color:#F4EFE6;">22</div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:17px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(244,239,230,0.55); margin-top:10px;">variables</div>
+          </div>
+          <div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:84px; line-height:0.92; letter-spacing:-0.03em; color:#E8843C;">0</div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:17px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(244,239,230,0.55); margin-top:10px;">faltantes</div>
+          </div>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:16px; letter-spacing:0.14em; text-transform:uppercase; color:rgba(244,239,230,0.5); margin-bottom:16px;">5 fuentes públicas y citables</div>
+        <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:38px;">
+          <span style="border:1px solid rgba(244,239,230,0.2); border-radius:999px; padding:11px 22px; font-size:21px; font-weight:500; color:#F4EFE6;">FIRMS · VIIRS</span>
+          <span style="border:1px solid rgba(244,239,230,0.2); border-radius:999px; padding:11px 22px; font-size:21px; font-weight:500; color:#F4EFE6;">SRTM</span>
+          <span style="border:1px solid rgba(244,239,230,0.2); border-radius:999px; padding:11px 22px; font-size:21px; font-weight:500; color:#F4EFE6;">NASA POWER</span>
+          <span style="border:1px solid rgba(244,239,230,0.2); border-radius:999px; padding:11px 22px; font-size:21px; font-weight:500; color:#F4EFE6;">ESA WorldCover</span>
+          <span style="border:1px solid rgba(244,239,230,0.2); border-radius:999px; padding:11px 22px; font-size:21px; font-weight:500; color:#F4EFE6;">IGN</span>
+        </div>
+        <div style="margin-top:6px; display:flex; align-items:flex-start; gap:16px;">
+          <span style="width:12px; height:14px; background:rgba(244,239,230,0.4); clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); flex-shrink:0; margin-top:7px;"></span>
+          <p style="font-size:25px; line-height:1.4; font-weight:400; margin:0; color:rgba(244,239,230,0.82);">Unidad de análisis: la <strong style="font-weight:600; color:#F4EFE6;">zona</strong> = hexágono H3 (res. 5, ~253 km²), no el foco individual.</p>
+        </div>
+      </div>
+      <div style="flex:0.85; min-height:0; display:flex; align-items:center; justify-content:center;">
+        <img class="zoomable" src="mapa_h3.png" alt="Grilla hexagonal H3 de la Patagonia coloreada por actividad histórica de fuego" style="max-height:100%; max-width:100%; width:auto; height:auto; object-fit:contain;">
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ SLIDE 4 · PIPELINE KNIME ════════ -->
+  <section data-screen-label="04 Pipeline" data-speaker-notes="3:00. Mostrar el workflow completo y recorrer el proceso KDD: selección → preprocesamiento → transformación → minería → interpretación. Dos ramas: EDA+K-Means y Apriori. Destacar las dos decisiones de pipeline robusto: Z-Score antes de K-Means y discretización con etiquetas antes de Apriori. Todo documentado nodo por nodo y reejecutable." style="background:#0F1E3D; color:#F4EFE6; font-family:'Manrope',sans-serif; padding:88px 110px 80px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.04; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%23F4EFE6' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <div style="position:relative; display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:26px;">
+      <div>
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom:24px;">
+          <span style="width:11px; height:13px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(244,239,230,0.55);">04 · Pipeline KNIME — proceso KDD</span>
+        </div>
+        <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:58px; line-height:1.02; letter-spacing:-0.015em; margin:0; color:#F4EFE6;">Un pipeline end-to-end, documentado y reejecutable</h2>
+      </div>
+    </div>
+    <div class="imgframe" style="position:relative; flex:1; display:flex; flex-direction:column; border-radius:6px; align-items:center; justify-content:center; margin-bottom:34px;">
+      <img class="zoomable" src="../results_knime/flujo_knime_comentado.jpeg" alt="Workflow completo de KNIME comentado nodo por nodo">
+    </div>
+    <div style="position:relative; display:flex; gap:48px;">
+      <div style="flex:1; display:flex; align-items:flex-start; gap:14px;">
+        <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:24px; color:#E8843C; flex-shrink:0;">01</span>
+        <p style="font-size:24px; line-height:1.35; margin:0; color:rgba(244,239,230,0.85);"><strong style="font-weight:600; color:#F4EFE6;">Z-Score</strong> obligatorio antes de K-Means (distancia euclidiana).</p>
+      </div>
+      <div style="flex:1; display:flex; align-items:flex-start; gap:14px;">
+        <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:24px; color:#E8843C; flex-shrink:0;">02</span>
+        <p style="font-size:24px; line-height:1.35; margin:0; color:rgba(244,239,230,0.85);"><strong style="font-weight:600; color:#F4EFE6;">Discretización con etiquetas</strong> interpretables antes de Apriori.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ SLIDE 5 · EDA ════════ -->
+  <section data-screen-label="05 EDA" data-speaker-notes="2:00. Statistics: 19 variables analíticas, 0 faltantes. Tres hallazgos: desbalance fuerte en n_focos (curtosis 184) → pocas zonas concentran casi todo el fuego; precip_anual muy variable (CV ≈ 52%) → gradiente este-oeste; brillo_medio ↔ brillo_max colineales (r ≈ 0,98). El EDA valida que los datos tienen sentido físico antes de minar." style="background:#0F1E3D; color:#F4EFE6; font-family:'Manrope',sans-serif; padding:88px 110px 80px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.04; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%23F4EFE6' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <div style="position:relative; display:flex; align-items:center; gap:14px; margin-bottom:30px;">
+      <span style="width:11px; height:13px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(244,239,230,0.55);">05 · Análisis exploratorio</span>
+    </div>
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:60px; line-height:1.02; letter-spacing:-0.015em; margin:0 0 44px; color:#F4EFE6;">Tres hallazgos antes de minar</h2>
+    <div style="position:relative; display:flex; gap:72px; flex:1;">
+      <div style="flex:1.1; display:flex; flex-direction:column; justify-content:center; gap:34px;">
+        <div style="display:flex; align-items:baseline; gap:28px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:54px; line-height:1; letter-spacing:-0.02em; color:#E8843C; min-width:240px;">curtosis 184</div>
+          <p style="font-size:27px; line-height:1.35; margin:0; color:rgba(244,239,230,0.88);">Pocas zonas concentran casi todo el fuego.</p>
+        </div>
+        <div style="height:1px; background:rgba(244,239,230,0.12);"></div>
+        <div style="display:flex; align-items:baseline; gap:28px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:54px; line-height:1; letter-spacing:-0.02em; color:#F4EFE6; min-width:240px;">CV ≈ 52%</div>
+          <p style="font-size:27px; line-height:1.35; margin:0; color:rgba(244,239,230,0.88);">Precipitación muy variable → gradiente este-oeste.</p>
+        </div>
+        <div style="height:1px; background:rgba(244,239,230,0.12);"></div>
+        <div style="display:flex; align-items:baseline; gap:28px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:54px; line-height:1; letter-spacing:-0.02em; color:#F4EFE6; min-width:240px;">r ≈ 0,98</div>
+          <p style="font-size:27px; line-height:1.35; margin:0; color:rgba(244,239,230,0.88);">brillo_medio ↔ brillo_max casi colineales.</p>
+        </div>
+      </div>
+      <div class="imgframe" style="flex:0.85; display:flex; flex-direction:column; border-radius:6px; align-items:center; justify-content:center;">
+        <img class="zoomable" src="../results_knime/stats1.jpeg" alt="Output del nodo Statistics de KNIME">
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ SLIDE 6 · K-MEANS ════════ -->
+  <section data-screen-label="06 K-Means" data-speaker-notes="2:30. k=3, semilla fija, Z-Score. Justificar k=3 por criterio de dominio. Tres clusters: rojo estepa seca pirofílica (mayor riesgo, atípicos a Z=22), naranja transicional (intermedio), verde húmeda/andina (bajo). Mensaje clave: el clustering reprodujo la tripartición ecológica clásica de la Patagonia sin ninguna etiqueta." style="background:#0F1E3D; color:#F4EFE6; font-family:'Manrope',sans-serif; padding:88px 110px 80px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.04; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%23F4EFE6' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <div style="position:relative; display:flex; align-items:center; gap:14px; margin-bottom:30px;">
+      <span style="width:11px; height:13px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(244,239,230,0.55);">06 · K-Means (k=3)</span>
+    </div>
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:60px; line-height:1.02; letter-spacing:-0.015em; margin:0 0 38px; color:#F4EFE6;">Tres perfiles ambientales</h2>
+    <div style="position:relative; display:flex; gap:26px; flex:1;">
+      <div style="flex:1; background:rgba(244,239,230,0.04); border:1px solid rgba(244,239,230,0.12); border-radius:8px; padding:32px 30px; display:flex; flex-direction:column;">
+        <div style="height:6px; width:64px; background:#C8503A; border-radius:3px; margin-bottom:24px;"></div>
+        <div style="display:flex; align-items:center; gap:11px; margin-bottom:18px;"><span style="width:13px; height:15px; background:#C8503A; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);"></span><span style="font-family:'JetBrains Mono',monospace; font-size:15px; letter-spacing:0.12em; text-transform:uppercase; color:#C8503A;">Rojo · cluster 1</span></div>
+        <h3 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; line-height:1.15; margin:0 0 14px; color:#F4EFE6;">Estepa seca pirofílica</h3>
+        <p style="font-size:22px; line-height:1.4; margin:0; color:rgba(244,239,230,0.78);">Baja precipitación, n_focos extremos (atípicos a Z=22).</p>
+        <div style="margin-top:auto; padding-top:22px; font-family:'JetBrains Mono',monospace; font-size:16px; letter-spacing:0.08em; text-transform:uppercase; color:#C8503A;">▲ Mayor riesgo</div>
+      </div>
+      <div style="flex:1; background:rgba(244,239,230,0.04); border:1px solid rgba(244,239,230,0.12); border-radius:8px; padding:32px 30px; display:flex; flex-direction:column;">
+        <div style="height:6px; width:64px; background:#E8843C; border-radius:3px; margin-bottom:24px;"></div>
+        <div style="display:flex; align-items:center; gap:11px; margin-bottom:18px;"><span style="width:13px; height:15px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);"></span><span style="font-family:'JetBrains Mono',monospace; font-size:15px; letter-spacing:0.12em; text-transform:uppercase; color:#E8843C;">Naranja · cluster 2</span></div>
+        <h3 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; line-height:1.15; margin:0 0 14px; color:#F4EFE6;">Estepa transicional</h3>
+        <p style="font-size:22px; line-height:1.4; margin:0; color:rgba(244,239,230,0.78);">Precipitación baja-media, actividad moderada de fuego.</p>
+        <div style="margin-top:auto; padding-top:22px; font-family:'JetBrains Mono',monospace; font-size:16px; letter-spacing:0.08em; text-transform:uppercase; color:#E8843C;">● Riesgo intermedio</div>
+      </div>
+      <div style="flex:1; background:rgba(244,239,230,0.04); border:1px solid rgba(244,239,230,0.12); border-radius:8px; padding:32px 30px; display:flex; flex-direction:column;">
+        <div style="height:6px; width:64px; background:#5C9E78; border-radius:3px; margin-bottom:24px;"></div>
+        <div style="display:flex; align-items:center; gap:11px; margin-bottom:18px;"><span style="width:13px; height:15px; background:#5C9E78; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);"></span><span style="font-family:'JetBrains Mono',monospace; font-size:15px; letter-spacing:0.12em; text-transform:uppercase; color:#5C9E78;">Verde · cluster 0</span></div>
+        <h3 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; line-height:1.15; margin:0 0 14px; color:#F4EFE6;">Zona húmeda / andina</h3>
+        <p style="font-size:22px; line-height:1.4; margin:0; color:rgba(244,239,230,0.78);">Amplio rango de precipitación, n_focos consistentemente bajos.</p>
+        <div style="margin-top:auto; padding-top:22px; font-family:'JetBrains Mono',monospace; font-size:16px; letter-spacing:0.08em; text-transform:uppercase; color:#5C9E78;">▼ Bajo riesgo</div>
+      </div>
+    </div>
+    <p style="position:relative; font-size:26px; line-height:1.4; margin:34px 0 0; color:rgba(244,239,230,0.9); max-width:90ch;">El clustering reprodujo la <strong style="font-weight:600; color:#F4EFE6;">tripartición ecológica</strong> clásica de la Patagonia <strong style="font-weight:600; color:#E8843C;">sin usar etiquetas</strong>.</p>
+  </section>
+
+  <!-- ════════ SLIDE 7 · APRIORI ════════ -->
+  <section data-screen-label="07 Apriori" data-speaker-notes="2:30. Parámetros: soporte ≥0,10 (≥198 zonas, estructural), confianza ≥0,60, filtro lift ≥1,2 → 184 reglas. Dos familias: con alta actividad de fuego {foco_alto, baja}⇒cálida lift 2,05 y {foco_alto, seca}⇒cálida lift 2,03; ambientales generales {cálida, lejano}⇒matorral lift 1,99. Decir explícitamente: Apriori mide co-ocurrencia, no causalidad." style="background:#0F1E3D; color:#F4EFE6; font-family:'Manrope',sans-serif; padding:88px 110px 80px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.04; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%23F4EFE6' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <div style="position:relative; display:flex; align-items:center; gap:14px; margin-bottom:30px;">
+      <span style="width:11px; height:13px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(244,239,230,0.55);">07 · Apriori — reglas de asociación</span>
+    </div>
+    <div style="position:relative; display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:36px;">
+      <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:60px; line-height:1.02; letter-spacing:-0.015em; margin:0; color:#F4EFE6;"><span style="color:#E8843C;">184</span> reglas accionables</h2>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.04em; color:rgba(244,239,230,0.6);">soporte ≥ 0,10 · confianza ≥ 0,60 · lift ≥ 1,2</span>
+    </div>
+    <div style="position:relative; display:flex; gap:64px; flex:1;">
+      <div style="flex:1.25; display:flex; flex-direction:column;">
+        <div style="display:grid; grid-template-columns:1fr auto; align-items:center; padding:0 4px 16px; border-bottom:1px solid rgba(244,239,230,0.18);">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:16px; letter-spacing:0.1em; text-transform:uppercase; color:rgba(244,239,230,0.5);">Regla</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:16px; letter-spacing:0.1em; text-transform:uppercase; color:rgba(244,239,230,0.5);">Lift</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr auto; align-items:center; padding:26px 4px; border-bottom:1px solid rgba(244,239,230,0.1);">
+          <span style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:500; color:#F4EFE6;">{foco_alto, baja} ⇒ cálida</span>
+          <span style="font-family:'Space Grotesk',sans-serif; font-size:34px; font-weight:700; color:#E8843C;">2,05</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr auto; align-items:center; padding:26px 4px; border-bottom:1px solid rgba(244,239,230,0.1);">
+          <span style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:500; color:#F4EFE6;">{foco_alto, seca} ⇒ cálida</span>
+          <span style="font-family:'Space Grotesk',sans-serif; font-size:34px; font-weight:700; color:#E8843C;">2,03</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr auto; align-items:center; padding:26px 4px;">
+          <span style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:500; color:rgba(244,239,230,0.8);">{cálida, lejano} ⇒ matorral</span>
+          <span style="font-family:'Space Grotesk',sans-serif; font-size:34px; font-weight:700; color:rgba(244,239,230,0.8);">1,99</span>
+        </div>
+        <p style="margin:auto 0 0; padding-top:24px; font-size:21px; line-height:1.45; color:rgba(244,239,230,0.62);">El fuego alto <strong style="font-weight:600; color:rgba(244,239,230,0.9);">co-ocurre</strong> con un perfil cálido, seco y de baja elevación. <span style="font-weight:600; color:#E8843C;">Apriori mide co-ocurrencia, no causalidad.</span></p>
+      </div>
+      <div class="imgframe" style="flex:0.85; display:flex; flex-direction:column; border-radius:6px; align-items:center; justify-content:center;">
+        <img class="zoomable" src="../results_knime/apriori_reglas.jpeg" alt="Tabla de reglas de asociación Apriori filtradas">
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ SLIDE 8 · TRIANGULACIÓN ════════ -->
+  <section data-screen-label="08 Triangulación" data-speaker-notes="1:30. El gran hallazgo: tres métodos independientes convergen en el mismo perfil de riesgo (cálido / seco / baja elevación / matorral): el clustering K-Means, las reglas Apriori y la literatura (Kitzberger et al.). Esa triangulación metodológica es el argumento de robustez más fuerte del trabajo." style="background:#F4EFE6; color:#0F1E3D; font-family:'Manrope',sans-serif; padding:88px 110px 80px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.05; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%230F1E3D' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <div style="position:relative; display:flex; align-items:center; gap:14px; margin-bottom:30px;">
+      <span style="width:11px; height:13px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(15,30,61,0.55);">08 · Hallazgo central</span>
+    </div>
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:60px; line-height:1.02; letter-spacing:-0.015em; margin:0 0 10px; color:#0F1E3D;">Triangulación metodológica</h2>
+    <p style="position:relative; font-size:28px; line-height:1.35; margin:0 0 46px; color:rgba(15,30,61,0.7); max-width:60ch;">Tres métodos independientes convergen en el <strong style="font-weight:600; color:#0F1E3D;">mismo perfil de riesgo</strong>.</p>
+    <div style="position:relative; flex:1; display:flex; flex-direction:column; justify-content:center;">
+      <div style="display:flex; gap:28px; justify-content:center;">
+        <div style="flex:1; max-width:380px; background:#FFFFFF; border:1px solid rgba(15,30,61,0.12); border-radius:8px; padding:30px 32px; text-align:center;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:15px; letter-spacing:0.14em; text-transform:uppercase; color:#E8843C; margin-bottom:12px;">Método 01</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; color:#0F1E3D;">Clustering K-Means</div>
+        </div>
+        <div style="flex:1; max-width:380px; background:#FFFFFF; border:1px solid rgba(15,30,61,0.12); border-radius:8px; padding:30px 32px; text-align:center;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:15px; letter-spacing:0.14em; text-transform:uppercase; color:#E8843C; margin-bottom:12px;">Método 02</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; color:#0F1E3D;">Reglas Apriori</div>
+        </div>
+        <div style="flex:1; max-width:380px; background:#FFFFFF; border:1px solid rgba(15,30,61,0.12); border-radius:8px; padding:30px 32px; text-align:center;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:15px; letter-spacing:0.14em; text-transform:uppercase; color:#E8843C; margin-bottom:12px;">Método 03</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:30px; color:#0F1E3D;">Literatura (Kitzberger)</div>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:center; margin:22px 0;">
+        <span style="width:0; height:0; border-left:18px solid transparent; border-right:18px solid transparent; border-top:24px solid rgba(15,30,61,0.35);"></span>
+      </div>
+      <div style="background:#0F1E3D; border-radius:10px; padding:42px 52px; text-align:center; margin:0 auto; max-width:1180px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:16px; letter-spacing:0.16em; text-transform:uppercase; color:rgba(244,239,230,0.6); margin-bottom:16px;">Mismo perfil de riesgo</div>
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:46px; line-height:1.1; letter-spacing:-0.01em; color:#F4EFE6;">Cálido · Seco · <span style="color:#E8843C;">Baja elevación</span> · Matorral</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ SLIDE 9 · LIMITACIONES ════════ -->
+  <section data-screen-label="09 Limitaciones" data-speaker-notes="1:00. Reconocer tres limitaciones (suma madurez): k=3 por criterio de dominio (validar con silueta); Apriori ignora la autocorrelación espacial entre hexágonos vecinos; solo zonas con foco (sesgo de selección, correcto para esta pregunta). Puente a IA: el dataset y los patrones son la base del trabajo predictivo supervisado." style="background:#0F1E3D; color:#F4EFE6; font-family:'Manrope',sans-serif; padding:88px 110px 80px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.04; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%23F4EFE6' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <div style="position:relative; display:flex; align-items:center; gap:14px; margin-bottom:30px;">
+      <span style="width:11px; height:13px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(244,239,230,0.55);">09 · Limitaciones y proyección</span>
+    </div>
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:60px; line-height:1.02; letter-spacing:-0.015em; margin:0 0 50px; color:#F4EFE6;">Lo que reconocemos, y hacia dónde sigue</h2>
+    <div style="position:relative; display:flex; gap:30px; margin-bottom:auto;">
+      <div style="flex:1;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:30px; color:rgba(244,239,230,0.3); margin-bottom:20px;">01</div>
+        <div style="height:1px; background:rgba(244,239,230,0.18); margin-bottom:22px;"></div>
+        <p style="font-size:26px; line-height:1.38; margin:0; color:rgba(244,239,230,0.88);"><strong style="font-weight:600; color:#F4EFE6;">k = 3</strong> por criterio de dominio (a validar con coef. de silueta).</p>
+      </div>
+      <div style="flex:1;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:30px; color:rgba(244,239,230,0.3); margin-bottom:20px;">02</div>
+        <div style="height:1px; background:rgba(244,239,230,0.18); margin-bottom:22px;"></div>
+        <p style="font-size:26px; line-height:1.38; margin:0; color:rgba(244,239,230,0.88);"><strong style="font-weight:600; color:#F4EFE6;">Autocorrelación espacial</strong> entre hexágonos vecinos, no modelada.</p>
+      </div>
+      <div style="flex:1;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:30px; color:rgba(244,239,230,0.3); margin-bottom:20px;">03</div>
+        <div style="height:1px; background:rgba(244,239,230,0.18); margin-bottom:22px;"></div>
+        <p style="font-size:26px; line-height:1.38; margin:0; color:rgba(244,239,230,0.88);"><strong style="font-weight:600; color:#F4EFE6;">Solo zonas con foco</strong> → sesgo de selección.</p>
+      </div>
+    </div>
+    <div style="position:relative; display:flex; align-items:center; gap:20px; background:rgba(232,132,60,0.1); border:1px solid rgba(232,132,60,0.32); border-radius:8px; padding:34px 40px;">
+      <span style="font-family:'JetBrains Mono',monospace; font-size:16px; letter-spacing:0.14em; text-transform:uppercase; color:#E8843C; flex-shrink:0;">Puente</span>
+      <p style="font-family:'Space Grotesk',sans-serif; font-weight:500; font-size:30px; line-height:1.25; margin:0; color:#F4EFE6;">Base para el modelado predictivo supervisado de IA y Machine Learning.</p>
+    </div>
+  </section>
+
+  <!-- ════════ SLIDE 10 · CONCLUSIONES ════════ -->
+  <section data-screen-label="10 Conclusiones" data-speaker-notes="0:30. Cierre: K-Means (k=3) → 3 perfiles = unidades ecológicas reales; Apriori → fuego alto co-ocurre con perfil cálido/seco/bajo (lift ≈ 2); dataset reproducible (1.980 × 22, 0 faltantes) = insumo para forecasting. Implicancia práctica: priorizar zonas de monitoreo para el SNMF. Gracias y preguntas." style="background:#0F1E3D; color:#F4EFE6; font-family:'Manrope',sans-serif; padding:88px 110px 80px; flex-direction:column; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:0; opacity:0.05; background-image:url(&quot;data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5z' fill='none' stroke='%23F4EFE6' stroke-width='1'/%3E%3C/svg%3E&quot;); background-size:62px auto; pointer-events:none;"></div>
+    <div style="position:relative; display:flex; align-items:center; gap:14px; margin-bottom:30px;">
+      <span style="width:11px; height:13px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); display:inline-block;"></span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:19px; letter-spacing:0.3em; text-transform:uppercase; color:rgba(244,239,230,0.55);">10 · Conclusiones</span>
+    </div>
+    <h2 style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:60px; line-height:1.02; letter-spacing:-0.015em; margin:0 0 44px; color:#F4EFE6;">Qué descubrimos</h2>
+    <div style="position:relative; display:flex; flex-direction:column; gap:26px; margin-bottom:46px;">
+      <div style="display:flex; align-items:flex-start; gap:18px;">
+        <span style="width:13px; height:15px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); flex-shrink:0; margin-top:9px;"></span>
+        <p style="font-size:29px; line-height:1.35; margin:0; color:rgba(244,239,230,0.9);">Tres perfiles ambientales = <strong style="font-weight:600; color:#F4EFE6;">unidades ecológicas reales</strong> de la Patagonia.</p>
+      </div>
+      <div style="display:flex; align-items:flex-start; gap:18px;">
+        <span style="width:13px; height:15px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); flex-shrink:0; margin-top:9px;"></span>
+        <p style="font-size:29px; line-height:1.35; margin:0; color:rgba(244,239,230,0.9);">El fuego alto co-ocurre con el perfil <strong style="font-weight:600; color:#F4EFE6;">cálido / seco / bajo</strong> <span style="color:rgba(244,239,230,0.6);">(lift ≈ 2)</span>.</p>
+      </div>
+      <div style="display:flex; align-items:flex-start; gap:18px;">
+        <span style="width:13px; height:15px; background:#E8843C; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); flex-shrink:0; margin-top:9px;"></span>
+        <p style="font-size:29px; line-height:1.35; margin:0; color:rgba(244,239,230,0.9);">Dataset reproducible (1.980 × 22) → <strong style="font-weight:600; color:#F4EFE6;">insumo directo para forecasting</strong>.</p>
+      </div>
+    </div>
+    <div style="position:relative; margin-top:auto; display:flex; align-items:flex-end; justify-content:space-between; gap:40px;">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:16px; letter-spacing:0.16em; text-transform:uppercase; color:#E8843C; margin-bottom:16px;">Implicancia práctica</div>
+        <p style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:38px; line-height:1.12; margin:0; color:#F4EFE6; max-width:24ch;">Priorizar zonas de monitoreo para el SNMF.</p>
+      </div>
+      <div style="text-align:right; flex-shrink:0;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:44px; letter-spacing:-0.01em; color:#F4EFE6;">Gracias</div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:20px; letter-spacing:0.08em; color:#E8843C; margin-top:8px;">¿Preguntas?</div>
+      </div>
+    </div>
+  </section>
+
+  </div>
+</div>
+
+<div id="hud"><b id="cur">1</b> / <span id="total">10</span></div>
+<div id="notes"><div class="tag" id="notes-tag">Notas · diapositiva 1</div><div id="notes-body"></div></div>
+<div id="lightbox"><img alt=""><div class="hint">click o Esc para cerrar</div></div>
+
+<script>
+  // Navegación mínima del deck — sin dependencias externas.
+  var frame  = document.getElementById('frame');
+  var slides = Array.prototype.slice.call(frame.querySelectorAll('section'));
+  var notes  = document.getElementById('notes');
+  var lightbox = document.getElementById('lightbox');
+  var lightboxImg = lightbox.querySelector('img');
+  var i = 0;
+
+  document.getElementById('total').textContent = slides.length;
+
+  function render() {
+    slides.forEach(function (s, idx) { s.classList.toggle('active', idx === i); });
+    document.getElementById('cur').textContent = i + 1;
+    document.getElementById('notes-tag').textContent = 'Notas · diapositiva ' + (i + 1);
+    document.getElementById('notes-body').textContent =
+      slides[i].getAttribute('data-speaker-notes') || '(sin notas)';
+    location.hash = i + 1;
+  }
+  function go(n) { i = Math.max(0, Math.min(slides.length - 1, n)); render(); }
+
+  // Escala el frame 1920×1080 para encajar en la pantalla (16:9).
+  function fit() {
+    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    frame.style.transform = 'scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+
+  document.addEventListener('keydown', function (e) {
+    // Con el lightbox abierto, Esc lo cierra y se ignora la navegación.
+    if (lightbox.classList.contains('show')) {
+      if (e.key === 'Escape') closeLightbox();
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowRight': case 'ArrowDown': case 'PageDown': case ' ':
+        e.preventDefault(); go(i + 1); break;
+      case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+        e.preventDefault(); go(i - 1); break;
+      case 'Home': e.preventDefault(); go(0); break;
+      case 'End':  e.preventDefault(); go(slides.length - 1); break;
+      case 'n': case 'N': notes.classList.toggle('show'); break;
+      case 'f': case 'F':
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen(); break;
+    }
+  });
+  // Click para avanzar (ignora clicks sobre las notas).
+  document.getElementById('stage').addEventListener('click', function () { go(i + 1); });
+
+  // Lightbox: ampliar imágenes a pantalla completa con el fondo difuminado.
+  function openLightbox(src, alt) {
+    lightboxImg.src = src; lightboxImg.alt = alt || '';
+    lightbox.classList.add('show');
+  }
+  function closeLightbox() {
+    lightbox.classList.remove('show'); lightboxImg.removeAttribute('src');
+  }
+  lightbox.addEventListener('click', function (e) { e.stopPropagation(); closeLightbox(); });
+  frame.querySelectorAll('img.zoomable').forEach(function (img) {
+    img.addEventListener('click', function (e) {
+      e.stopPropagation();   // que el click no avance la diapositiva
+      openLightbox(img.getAttribute('src'), img.getAttribute('alt'));
+    });
+  });
+
+  // Permite arrancar en una diapositiva concreta vía #N en la URL.
+  var start = parseInt((location.hash || '').replace('#', ''), 10);
+  if (start >= 1 && start <= slides.length) i = start - 1;
+
+  fit();
+  render();
+</script>
+</body>
+</html>
