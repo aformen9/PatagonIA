@@ -48,28 +48,30 @@ El pipeline de construcción del dataset (`notebooks/01` a `05`) es neutral — 
 ```
 PatagonIA/
 ├── notebooks/                  ← construcción del dataset + TPs de IA
-│   ├── 01_grilla_h3.py         ← grilla H3 resolución 5 sobre Patagonia
-│   ├── 02_descarga_firms.py    ← focos VIIRS 2010-2023
-│   ├── 03_descarga_gfs.py      ← GFS hindcast + anomalías
-│   ├── 04_variables_estaticas.py ← SRTM, ESA WorldCover, IGN
+│   ├── 01_firms_a_h3.py        ← focos VIIRS 2012-2023 → agregación H3 res 5
+│   ├── 02_elevacion_clima.py   ← elevación SRTM + clima NASA POWER
+│   ├── 03_vegetacion_esa.py    ← cobertura vegetal ESA WorldCover 2021
+│   ├── 04_distancias_ign.py    ← distancias a asentamientos y rutas (IGN)
 │   ├── 05_join_final.py        ← integración del dataset final
-│   ├── 06_eda.ipynb            ← TP1: análisis exploratorio
-│   ├── 07_regresion_tp2.ipynb  ← TP2: 7 modelos de regresión D+1..D+7
-│   └── 08_clasificacion_tp3.ipynb ← TP3: clasificación riesgo_alto
+│   ├── 06_eda.ipynb            ← TP1: análisis exploratorio (planeado)
+│   ├── 07_regresion_tp2.ipynb  ← TP2: regresión D+1..D+7 (planeado)
+│   └── 08_clasificacion_tp3.ipynb ← TP3: clasificación riesgo_alto (planeado)
 │
-├── knime/                      ← Minería de Datos (entrega: junio 2026)
-│   └── patagonia_pipeline.knwf ← workflow K-Means + Apriori
+├── knime/                      ← Minería de Datos
+│   ├── PatagonIA_Mineria.knwf  ← workflow K-Means + Apriori
+│   ├── results_knime/          ← figuras del workflow
+│   └── informe_mdbd/           ← artículo académico (PDF)
 │
-├── app/                        ← TP4: app Streamlit
+├── app/                        ← TP4: app Streamlit (planeado)
 │   ├── app.py
-│   └── models/                 ← 7 pipelines serializados (.joblib)
+│   └── models/                 ← pipelines serializados (.joblib)
 │
 ├── data/
 │   ├── raw/                    ← datos crudos por fuente (no versionados)
 │   │   ├── firms/
 │   │   ├── esa_worldcover/
 │   │   └── ign/
-│   ├── processed/              ← patagonia_dataset_final.parquet
+│   ├── processed/              ← patagonia_dataset.csv (entregable compartido)
 │   └── static/                 ← grilla H3, variables estáticas
 │
 ├── src/                        ← funciones reutilizables Python
@@ -106,14 +108,14 @@ El resto de las fuentes no requieren cuenta.
 
 ```bash
 # Ejecutar en orden — cada script depende del anterior
-python notebooks/01_grilla_h3.py
-python notebooks/02_descarga_firms.py
-python notebooks/03_descarga_gfs.py
-python notebooks/04_variables_estaticas.py
+python notebooks/01_firms_a_h3.py
+python notebooks/02_elevacion_clima.py
+python notebooks/03_vegetacion_esa.py
+python notebooks/04_distancias_ign.py
 python notebooks/05_join_final.py
 ```
 
-Output final: `data/processed/patagonia_dataset_final.parquet`
+Output final: `data/processed/patagonia_dataset.csv`
 
 ---
 
