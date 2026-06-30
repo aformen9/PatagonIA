@@ -87,7 +87,7 @@ PatagonIA/
 ## Instalación
 
 ```bash
-git clone https://github.com/TU_USUARIO/PatagonIA.git
+git clone https://github.com/aformen9/PatagonIA.git
 cd PatagonIA
 pip install -r requirements.txt
 ```
@@ -97,7 +97,7 @@ pip install -r requirements.txt
 **NASA Earthdata** (FIRMS + SRTM) — crear cuenta en https://urs.earthdata.nasa.gov  
 Guardar en `~/.netrc`:
 ```
-machine urs.earthdata.nasa.gov login aformen9 password TU_PASSWORD
+machine urs.earthdata.nasa.gov login TU_USUARIO password TU_PASSWORD
 ```
 
 El resto de las fuentes no requieren cuenta.
