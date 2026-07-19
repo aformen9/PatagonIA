@@ -13,7 +13,18 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer, TransformedTargetRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    cohen_kappa_score,
+    f1_score,
+    mean_absolute_error,
+    mean_squared_error,
+    precision_score,
+    r2_score,
+    recall_score,
+    roc_auc_score,
+)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -129,6 +140,120 @@ def evaluar_modelo(modelo, X_train, y_train, X_test, y_test) -> dict:
     modelo.fit(X_train, y_train)
     m_tr = calcular_metricas(y_train, modelo.predict(X_train))
     m_te = calcular_metricas(y_test, modelo.predict(X_test))
+    fila = {f"train_{k}": v for k, v in m_tr.items()}
+    fila.update({f"test_{k}": v for k, v in m_te.items()})
+    fila["_modelo"] = modelo
+    return fila
+
+
+# ---------------------------------------------------------------------------
+# Clasificación (TP3): riesgo_alto = (n_focos > 150)
+# ---------------------------------------------------------------------------
+# Se reutiliza EXACTAMENTE el mismo preprocesador que en regresión
+# (``construir_preprocesador``): imputación por mediana + escalado de las 7
+# numéricas y one-hot de ``cobertura_veg``, todo dentro del ``Pipeline`` para
+# que se aprenda sólo con el fold de entrenamiento. `n_focos` y el resto de
+# variables de fuego NO forman parte de las features: el target se deriva de
+# `n_focos`, así que incluirlo sería fuga directa.
+
+
+def construir_pipeline_clf(estimador) -> Pipeline:
+    """Ensambla preprocesador + clasificador (sin transformar el target).
+
+    Análogo a ``construir_pipeline`` pero para clasificación: no hay
+    ``TransformedTargetRegressor`` porque el objetivo es binario.
+
+    Args:
+        estimador: Clasificador de scikit-learn (o compatible con su API).
+
+    Returns:
+        ``Pipeline`` con pasos ``prep`` (preprocesamiento) y ``model``.
+    """
+    return Pipeline([
+        ("prep", construir_preprocesador()),
+        ("model", estimador),
+    ])
+
+
+def calcular_metricas_clf(y_true, y_pred, y_score=None) -> dict:
+    """Calcula el panel de métricas de clasificación binaria.
+
+    Métricas obligatorias del TP: accuracy, precision/recall/F1 tanto de la
+    **clase positiva** (``riesgo_alto=1``, la de interés) como en promedio
+    **weighted** (pondera por soporte), y el Kappa de Cohen. Si se pasa un
+    score continuo de la clase positiva, agrega ROC-AUC y AUC-PR (average
+    precision), las métricas robustas al desbalance.
+
+    Args:
+        y_true: Etiquetas observadas (0/1).
+        y_pred: Etiquetas predichas (0/1).
+        y_score: Score/probabilidad de la clase positiva. Opcional.
+
+    Returns:
+        Diccionario de métricas escalares.
+    """
+    m = {
+        "accuracy": accuracy_score(y_true, y_pred),
+        "precision_pos": precision_score(y_true, y_pred, pos_label=1,
+                                         zero_division=0),
+        "recall_pos": recall_score(y_true, y_pred, pos_label=1,
+                                   zero_division=0),
+        "f1_pos": f1_score(y_true, y_pred, pos_label=1, zero_division=0),
+        "precision_w": precision_score(y_true, y_pred, average="weighted",
+                                       zero_division=0),
+        "recall_w": recall_score(y_true, y_pred, average="weighted",
+                                 zero_division=0),
+        "f1_w": f1_score(y_true, y_pred, average="weighted", zero_division=0),
+        "kappa": cohen_kappa_score(y_true, y_pred),
+    }
+    if y_score is not None:
+        m["roc_auc"] = roc_auc_score(y_true, y_score)
+        m["ap"] = average_precision_score(y_true, y_score)  # AUC-PR
+    return m
+
+
+def score_positivo(modelo, X):
+    """Devuelve el score continuo de la clase positiva.
+
+    Usa ``predict_proba[:, 1]`` si el estimador la expone; si no, recurre a
+    ``decision_function`` (p. ej. un SVC sin ``probability``). Devuelve
+    ``None`` si el modelo no ofrece ninguna (p. ej. ``DummyClassifier`` en
+    modos sin probabilidad útil, aunque éste sí expone ``predict_proba``).
+
+    Args:
+        modelo: Clasificador entrenado.
+        X: Matriz de features.
+
+    Returns:
+        Array de scores de la clase positiva, o ``None``.
+    """
+    if hasattr(modelo, "predict_proba"):
+        return modelo.predict_proba(X)[:, 1]
+    if hasattr(modelo, "decision_function"):
+        return modelo.decision_function(X)
+    return None
+
+
+def evaluar_clasificador(modelo, X_train, y_train, X_test, y_test) -> dict:
+    """Entrena el clasificador y calcula el panel de métricas en train y test.
+
+    Reportar train y test permite leer el sobreajuste de forma explícita
+    (p. ej. un árbol o KNN con recall_pos perfecto en train y pobre en test).
+
+    Args:
+        modelo: Pipeline/estimador de clasificación (sin entrenar).
+        X_train, y_train: Partición de entrenamiento.
+        X_test, y_test: Partición de prueba.
+
+    Returns:
+        Diccionario plano con métricas ``train_*`` y ``test_*`` y el modelo
+        entrenado bajo la clave ``_modelo``.
+    """
+    modelo.fit(X_train, y_train)
+    s_tr = score_positivo(modelo, X_train)
+    s_te = score_positivo(modelo, X_test)
+    m_tr = calcular_metricas_clf(y_train, modelo.predict(X_train), s_tr)
+    m_te = calcular_metricas_clf(y_test, modelo.predict(X_test), s_te)
     fila = {f"train_{k}": v for k, v in m_tr.items()}
     fila.update({f"test_{k}": v for k, v in m_te.items()})
     fila["_modelo"] = modelo
