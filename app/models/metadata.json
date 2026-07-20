@@ -90,21 +90,21 @@
   "metricas": {
     "f1_pos_media": 0.6,
     "f1_pos_desvio": 0.07,
-    "auc_pr": 0.6481093578542456,
+    "auc_pr": 0.6528364786614087,
     "umbral_decision": 0.386,
-    "recall_en_umbral": 0.7195571955719557,
-    "precision_en_umbral": 0.4588235294117647,
-    "f1_en_umbral": 0.5603448275862069
+    "recall_en_umbral": 0.7232472324723247,
+    "precision_en_umbral": 0.4537037037037037,
+    "f1_en_umbral": 0.5576102418207681
   },
   "importancias": {
-    "elevacion": 0.07553917914628983,
-    "temp_media": 0.11098089814186096,
-    "precip_anual": 0.11205362528562546,
-    "viento_medio": 0.19929726421833038,
-    "humedad_relativa": 0.06947271525859833,
-    "dist_asentamiento_km": 0.05482453852891922,
-    "dist_ruta_km": 0.051438942551612854,
-    "cobertura_veg": 0.3263928294181824
+    "elevacion": 0.07759533822536469,
+    "temp_media": 0.10779275000095367,
+    "precip_anual": 0.11729948222637177,
+    "viento_medio": 0.19992871582508087,
+    "humedad_relativa": 0.07466227561235428,
+    "dist_asentamiento_km": 0.0578032061457634,
+    "dist_ruta_km": 0.056854043155908585,
+    "cobertura_veg": 0.30806416273117065
   },
   "envolvente": {
     "features": [
