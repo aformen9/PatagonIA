@@ -477,7 +477,7 @@ def main() -> None:
         unsafe_allow_html=True)
     k3.markdown(
         tarjeta_kpi("Umbral de decisión", f"{umbral:.3f}",
-                    "recall ≈ 0.80 (prioriza detección)", color=COLOR_TEXTO),
+                    "recall ≈ 0.72 (prioriza detección)", color=COLOR_TEXTO),
         unsafe_allow_html=True)
     badge = (("ATÍPICO", "badge-warn") if atipico else ("OK", "badge-ok"))
     k4.markdown(
