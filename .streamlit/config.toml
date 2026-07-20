@@ -1,0 +1,12 @@
+# Tema oscuro de la app PatagonIA (TP4). Streamlit lo toma automáticamente al
+# ejecutar `streamlit run app/app.py` desde la raíz del proyecto.
+[theme]
+base = "dark"
+primaryColor = "#00D97E"
+backgroundColor = "#0B1120"
+secondaryBackgroundColor = "#151E32"
+textColor = "#E5E9F0"
+font = "sans serif"
+
+[server]
+headless = true
