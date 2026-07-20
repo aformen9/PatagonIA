@@ -4,8 +4,8 @@
 Dashboard oscuro que carga el `Pipeline` serializado en el Paso 1
 (`app/models/`) y su metadata, y estima —a partir de 8 predictoras
 ambientales— si un hexágono es de **riesgo alto** de incendio. No re-entrena ni
-necesita el dataset crudo: sólo consume `clasificador_riesgo.joblib` y
-`metadata.json`.
+necesita el dataset crudo: sólo consume `clasificador_riesgo.joblib`,
+`metadata.json` y `hexagonos.csv` (el tablero para el mapa interactivo).
 
 Ejecutar:  ``streamlit run app/app.py``
 """
@@ -20,13 +20,16 @@ import joblib
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import pydeck as pdk
 import streamlit as st
+import xgboost as xgb
 
 # --- Rutas de los artefactos (relativas a este archivo) ---------------------
 DIR_APP = Path(__file__).resolve().parent
 DIR_MODELOS = DIR_APP / "models"
 RUTA_MODELO = DIR_MODELOS / "clasificador_riesgo.joblib"
 RUTA_METADATA = DIR_MODELOS / "metadata.json"
+RUTA_HEXAGONOS = DIR_MODELOS / "hexagonos.csv"
 
 # --- Paleta del tema oscuro (coherente con .streamlit/config.toml) ----------
 COLOR_FONDO = "#0B1120"
@@ -36,6 +39,18 @@ COLOR_TENUE = "#8A94A6"
 COLOR_ALTO = "#F87171"       # riesgo alto (rojo suave)
 COLOR_BAJO = "#00D97E"       # riesgo bajo (verde primario)
 COLOR_BARRA = "#3B82F6"      # azul para el histograma
+
+# Paleta del mapa de "focos observados": misma escala crema→naranja→marrón
+# que knime/presentacion/generar_mapa_h3.py, para que ambas figuras del
+# trabajo (presentación y app) se lean como el mismo sistema visual.
+COLOR_FOCOS_CLARO = "#F4EFE6"
+COLOR_FOCOS_MEDIO = "#E8843C"
+COLOR_FOCOS_OSCURO = "#9E3B16"
+
+# Paleta de la vista "Aciertos y errores" (matriz de confusión sobre el mapa).
+COLOR_FN = "#A78BFA"   # riesgo alto no detectado (falso negativo, el error más costoso)
+COLOR_FP = "#FBBF24"   # falsa alarma (falso positivo)
+COLOR_VN = "#3B4759"   # acierto en riesgo bajo (neutro, no compite visualmente)
 
 # --- Agrupación de los sliders en la barra lateral --------------------------
 GRUPOS_SLIDERS: dict[str, list[str]] = {
@@ -76,27 +91,44 @@ def cargar_metadata(ruta: Path) -> dict[str, Any]:
         return json.load(archivo)
 
 
+@st.cache_data(show_spinner=False)
+def cargar_hexagonos(ruta: Path) -> pd.DataFrame:
+    """Carga el tablero de hexágonos para el mapa interactivo.
+
+    Args:
+        ruta: Ruta a ``hexagonos.csv`` (coordenadas, predictoras, target
+            observado y probabilidad *out-of-fold*), generado en el Paso 1.
+
+    Returns:
+        DataFrame con una fila por hexágono H3.
+    """
+    return pd.read_csv(ruta)
+
+
 # ---------------------------------------------------------------------------
 # Lógica de dominio (idéntica al modelo original; sólo cambia la presentación)
 # ---------------------------------------------------------------------------
 def parametros_slider(
     rango: dict[str, float],
-) -> tuple[float, float, float, float, str]:
-    """Calcula ``(min, max, valor_defecto, paso, formato)`` para un slider.
+) -> tuple[float, float, float, float, str, int]:
+    """Calcula ``(min, max, valor_defecto, paso, formato, decimales)`` para un slider.
 
     El **valor por defecto es siempre la mediana** leída de ``metadata.json``.
     Para que Streamlit ubique bien el control, redondea extremos y mediana a una
     misma cantidad de decimales y usa un paso de ``10**-decimales``: así la
     mediana cae **exactamente sobre la grilla** del slider (si no, el frontend
     de Streamlit desplaza el control cerca del máximo). Los extremos se
-    redondean hacia afuera para no recortar el rango observado.
+    redondean hacia afuera para no recortar el rango observado. Se devuelven
+    también los ``decimales`` porque se reusan para redondear valores reales
+    de un hexágono (mapa) a la misma grilla.
 
     Args:
         rango: Entrada de ``metadata["rangos"]`` con ``min``, ``max`` y
             ``mediana``.
 
     Returns:
-        Tupla ``(lo, hi, valor_defecto, paso, formato)`` para ``st.slider``.
+        Tupla ``(lo, hi, valor_defecto, paso, formato, decimales)`` para
+        ``st.slider``.
     """
     lo_obs, hi_obs = float(rango["min"]), float(rango["max"])
     mediana = float(rango["mediana"])
@@ -109,56 +141,150 @@ def parametros_slider(
     hi = math.ceil(hi_obs * factor) / factor
     valor = min(max(round(mediana, decimales), lo), hi)  # mediana sobre grilla
     paso = 1.0 / factor
-    return lo, hi, valor, paso, f"%.{decimales}f"
+    return lo, hi, valor, paso, f"%.{decimales}f", decimales
 
 
-def recoger_entradas(meta: dict[str, Any]) -> pd.DataFrame:
+def hexagono_seleccionado() -> dict[str, Any] | None:
+    """Devuelve la fila del hexágono clickeado en el mapa, si hay alguno.
+
+    Lee ``st.session_state["mapa_hex"]``, el estado de selección de
+    ``st.pydeck_chart``. Streamlit ya lo puebla con el resultado del click
+    *antes* de que el script llegue a instanciar de nuevo el widget del mapa,
+    así que puede leerse al principio de ``main()`` para sincronizar los
+    sliders antes de dibujar la barra lateral.
+
+    Returns:
+        Diccionario con todas las columnas de ``hexagonos.csv`` para el
+        hexágono seleccionado, o ``None`` si no hay selección.
+    """
+    estado = st.session_state.get("mapa_hex")
+    if not estado:
+        return None
+    objetos = estado.get("selection", {}).get("objects", {}).get("hexagonos")
+    return objetos[0] if objetos else None
+
+
+def sincronizar_seleccion(meta: dict[str, Any], fila_hex: dict[str, Any]) -> None:
+    """Escribe los valores reales de un hexágono en el estado de los sliders.
+
+    Debe llamarse **antes** de instanciar los widgets (``recoger_entradas``):
+    Streamlit no permite reasignar el valor de un widget con ``key`` después
+    de haberlo dibujado en el mismo run.
+
+    Args:
+        meta: Metadata del modelo (rangos, categorías).
+        fila_hex: Fila de ``hexagonos.csv`` del hexágono clickeado.
+    """
+    for col in meta["features_numericas"]:
+        r = meta["rangos"][col]
+        lo, hi, _, _, _, decimales = parametros_slider(r)
+        valor = min(max(round(float(fila_hex[col]), decimales), lo), hi)
+        st.session_state[f"in_{col}"] = valor
+
+    cat = meta["feature_categorica"]
+    if fila_hex[cat] in meta["categorias_cobertura"]:
+        st.session_state[f"in_{cat}"] = fila_hex[cat]
+
+
+def recoger_entradas(meta: dict[str, Any], hexagonos: pd.DataFrame) -> pd.DataFrame:
     """Dibuja los controles agrupados y devuelve un DataFrame de una fila.
 
     Los sliders se organizan en tres expanders temáticos (Clima, Relieve y
     vegetación, Accesibilidad). Cada slider está acotado al rango observado
     (imposible ingresar valores absurdos) y muestra su min/max debajo. La
-    cobertura vegetal es un ``selectbox``.
+    cobertura vegetal es un ``selectbox``. Todos los controles tienen
+    ``key=f"in_{columna}"``: es lo que permite que ``sincronizar_seleccion``
+    los sobrescriba con los valores reales de un hexágono clickeado en el mapa.
 
     Args:
         meta: Metadata del modelo.
+        hexagonos: Tablero de hexágonos (para mostrar la ubicación del
+            hexágono actualmente cargado, si hay uno).
 
     Returns:
         DataFrame de una fila con las 8 columnas que espera el Pipeline, en el
         orden correcto.
     """
     valores: dict[str, Any] = {}
-    st.sidebar.header("Condiciones del hexágono")
-    st.sidebar.caption(
-        "Ajustá las condiciones ambientales. Los límites son los observados en "
-        "la Patagonia (2012–2023): no se pueden ingresar valores imposibles."
-    )
     cat = meta["feature_categorica"]
+    st.sidebar.header("Condiciones del hexágono")
+
+    hex_actual = st.session_state.get("_hex_procesado")
+    if st.session_state.get("_mostrando_hex") and hex_actual is not None:
+        fila = hexagonos.loc[hexagonos["hex"] == hex_actual]
+        ubic = (f" · lat {fila.lat.iloc[0]:.2f}, lon {fila.lon.iloc[0]:.2f}"
+                if not fila.empty else "")
+        st.sidebar.success(f"📍 Hexágono **{hex_actual}**{ubic}")
+        if st.sidebar.button("↺ Volver a la mediana", use_container_width=True):
+            for col in meta["features_numericas"] + [cat]:
+                st.session_state.pop(f"in_{col}", None)
+            st.session_state["_mostrando_hex"] = False
+            # OJO: `_hex_procesado` se deja intacto a propósito. El mapa no
+            # se puede "deseleccionar" por código (Streamlit no permite
+            # modificar el estado de selección de pydeck), así que si lo
+            # limpiáramos acá, el próximo rerun volvería a detectar "selección
+            # nueva" y recargaría el mismo hexágono, anulando este botón.
+            st.rerun()  # evita mostrar el banner viejo un frame de más
+    else:
+        st.sidebar.caption(
+            "Ajustá las condiciones ambientales o hacé clic en un hexágono del "
+            "mapa. Los límites son los observados en la Patagonia (2012–2023): "
+            "no se pueden ingresar valores imposibles."
+        )
 
     for grupo, columnas in GRUPOS_SLIDERS.items():
         with st.sidebar.expander(grupo, expanded=(grupo == "Clima")):
             for col in columnas:
                 r = meta["rangos"][col]
-                lo, hi, valor, paso, fmt = parametros_slider(r)
-                valores[col] = st.slider(
-                    r["etiqueta"], min_value=lo, max_value=hi, value=valor,
-                    step=paso, format=fmt,
+                lo, hi, valor, paso, fmt, _ = parametros_slider(r)
+                key = f"in_{col}"
+                # `value=` sólo se pasa si la clave todavía no existe en
+                # session_state: si ya existe (slider tocado a mano, o cargado
+                # desde un click en el mapa), pasar ambos dispara un warning
+                # de política de Streamlit y `value` quedaría ignorado igual.
+                kwargs = dict(
+                    min_value=lo, max_value=hi, step=paso, format=fmt, key=key,
                     help=f"Por defecto: la mediana ({fmt % r['mediana']} "
                          f"{r['unidad']}).",
                 )
+                if key not in st.session_state:
+                    kwargs["value"] = valor
+                valores[col] = st.slider(r["etiqueta"], **kwargs)
                 st.caption(
                     f"mín {fmt % r['min']}  ·  máx {fmt % r['max']} "
                     f"{r['unidad']}"
                 )
             # La cobertura vegetal acompaña al relieve.
             if grupo == "Relieve y vegetación":
-                valores[cat] = st.selectbox(
-                    "Cobertura vegetal", options=meta["categorias_cobertura"],
+                key_cat = f"in_{cat}"
+                kwargs_cat = dict(
+                    options=meta["categorias_cobertura"], key=key_cat,
                     help="Tipo de cobertura dominante del hexágono.",
                 )
+                if key_cat not in st.session_state:
+                    # la más frecuente: notebook 09 ordena por value_counts()
+                    kwargs_cat["index"] = 0
+                valores[cat] = st.selectbox("Cobertura vegetal", **kwargs_cat)
 
     columnas = meta["features_numericas"] + [cat]
     return pd.DataFrame([valores])[columnas]
+
+
+@st.cache_data(show_spinner=False)
+def _inversa_covarianza(cov: list[list[float]]) -> np.ndarray:
+    """Inversa (Moore-Penrose) de la covarianza de la envolvente, cacheada.
+
+    Es la misma matriz para toda la sesión (viene de ``metadata.json``, no del
+    input); recalcularla en cada movimiento de slider es trabajo repetido de
+    balde.
+
+    Args:
+        cov: Matriz de covarianza de ``metadata["envolvente"]["cov"]``.
+
+    Returns:
+        Pseudo-inversa de ``cov``.
+    """
+    return np.linalg.pinv(np.asarray(cov, dtype=float))
 
 
 def distancia_mahalanobis(fila: pd.DataFrame, meta: dict[str, Any]) -> float:
@@ -179,7 +305,7 @@ def distancia_mahalanobis(fila: pd.DataFrame, meta: dict[str, Any]) -> float:
     env = meta["envolvente"]
     x = fila[env["features"]].to_numpy(dtype=float).ravel()
     mu = np.asarray(env["media"], dtype=float)
-    inv = np.linalg.pinv(np.asarray(env["cov"], dtype=float))
+    inv = _inversa_covarianza(env["cov"])
     delta = x - mu
     return float(np.sqrt(delta @ inv @ delta))
 
@@ -203,6 +329,49 @@ def features_mas_atipicas(fila: pd.DataFrame, meta: dict[str, Any],
     z = np.abs((x - mu) / np.where(sd == 0, 1.0, sd))
     orden = np.argsort(z)[::-1][:n]
     return [meta["rangos"][env["features"][i]]["etiqueta"] for i in orden]
+
+
+def contribuciones_locales(
+    fila: pd.DataFrame, modelo: Any, meta: dict[str, Any]
+) -> tuple[dict[str, float], float]:
+    """Descomposición TreeSHAP exacta de la predicción para ESTA fila.
+
+    XGBoost calcula TreeSHAP de forma nativa (``pred_contribs=True``): no hace
+    falta instalar la librería ``shap`` aparte. La salida está en **log-odds**
+    y es exacta, no una aproximación: ``base_value + Σ contribuciones``
+    reproduce el logit de la predicción, y su sigmoide reproduce la
+    probabilidad que muestra el gauge (se verifica en la app, no sólo se
+    afirma).
+
+    Las columnas one-hot de ``cobertura_veg`` se agregan a una sola
+    contribución (mismo patrón que ``importancias`` en el notebook 09): sólo
+    una de ellas es distinta de cero por fila, así que sumarlas no mezcla
+    nada.
+
+    Args:
+        fila: DataFrame de una fila con las 8 columnas de entrada.
+        modelo: Pipeline completo (``prep`` + ``model``).
+        meta: Metadata del modelo.
+
+    Returns:
+        Tupla ``(contribuciones, base_value)``: diccionario de las 8 features
+        originales a su contribución en log-odds, y el valor base del modelo.
+    """
+    prep = modelo.named_steps["prep"]
+    booster = modelo.named_steps["model"].get_booster()
+    nombres = list(prep.get_feature_names_out())
+    Xt = prep.transform(fila)
+    dmat = xgb.DMatrix(Xt, feature_names=nombres)
+    fila_contribs = booster.predict(dmat, pred_contribs=True)[0]
+
+    cat = meta["feature_categorica"]
+    contribs: dict[str, float] = {}
+    for c in meta["features_numericas"]:
+        contribs[c] = float(fila_contribs[nombres.index(f"num__{c}")])
+    contribs[cat] = float(sum(
+        v for n, v in zip(nombres, fila_contribs[:-1]) if n.startswith("cat__")))
+    base_value = float(fila_contribs[-1])
+    return contribs, base_value
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +400,15 @@ def _layout_oscuro(fig: go.Figure, altura: int = 300) -> go.Figure:
 
 def grafico_gauge(prob: float, umbral: float, es_alto: bool) -> go.Figure:
     """Gauge circular de probabilidad con el umbral de decisión marcado.
+
+    El umbral se marca con una línea sobre el arco (``threshold``) y con el
+    sombreado verde/rojo de los tramos (``steps``); a propósito **no** lleva
+    un texto superpuesto dentro de la figura. Plotly posiciona el número
+    grande (``mode="gauge+number"``) en la zona baja-central del semicírculo,
+    que es el mismo lugar donde iría cualquier anotación de texto agregada
+    ahí — con probabilidades altas (número de 3 dígitos) los dos se pisan.
+    Por eso el texto del umbral se agrega afuera, como ``st.caption`` en
+    ``main()``.
 
     Args:
         prob: Probabilidad estimada de riesgo alto (0–1).
@@ -262,24 +440,36 @@ def grafico_gauge(prob: float, umbral: float, es_alto: bool) -> go.Figure:
         },
         domain={"x": [0, 1], "y": [0, 1]},
     ))
-    fig.add_annotation(
-        x=0.5, y=0.02, showarrow=False, xref="paper", yref="paper",
-        text=f"umbral de decisión: {umbral * 100:.1f} %",
-        font=dict(color=COLOR_TENUE, size=12),
-    )
     return _layout_oscuro(fig, altura=300)
 
 
-def grafico_histograma_focos(meta: dict[str, Any], es_alto: bool) -> go.Figure:
+def grafico_histograma_focos(
+    meta: dict[str, Any], es_alto: bool, n_focos_real: float | None = None
+) -> go.Figure:
     """Histograma de ``n_focos`` (escala log) con la zona estimada resaltada.
 
-    El modelo no predice el número exacto de focos, sino el **lado** del umbral
-    (150 focos) en que caería el hexágono. Se marca ese umbral y se sombrea la
-    región de la clase estimada.
+    Es la distribución histórica **completa y fija** de los 1981 hexágonos: no
+    cambia con los sliders. Lo único que sí cambia con la clasificación actual
+    es qué mitad se sombrea, porque el modelo no predice un número de focos,
+    sólo el **lado** del umbral (150) en que caería el hexágono.
+
+    Si se pasa ``n_focos_real`` —el hexágono viene de un click en el mapa, no
+    de una combinación manual de sliders— se marca además con una línea sólida
+    el valor **observado** de ese hexágono puntual. Es la única referencia
+    concreta que puede dibujarse: para una combinación hipotética de sliders
+    no existe un ``n_focos`` real que marcar.
+
+    A propósito, la figura **no lleva texto superpuesto**: sobre un histograma
+    con barras de distinta altura, cualquier anotación cae sobre alguna barra
+    en algún punto y queda ilegible. El significado de cada línea (umbral,
+    zona sombreada, hexágono actual) se explica en el texto que ``main()``
+    dibuja debajo del gráfico, fuera de la figura.
 
     Args:
         meta: Metadata con ``distribucion_n_focos`` y ``umbral_riesgo_focos``.
         es_alto: Si la clasificación estimada es riesgo alto.
+        n_focos_real: ``n_focos`` observado del hexágono actual, si viene del
+            mapa. ``None`` si los sliders son una combinación manual.
 
     Returns:
         Figura Plotly.
@@ -306,16 +496,11 @@ def grafico_histograma_focos(meta: dict[str, Any], es_alto: bool) -> go.Figure:
                       line_width=0)
     fig.add_vline(x=log_umbral, line_dash="dash", line_color=COLOR_ALTO,
                   line_width=2)
-    fig.add_annotation(x=log_umbral, y=1, yref="paper", yanchor="bottom",
-                       showarrow=False, text=f" umbral {int(umbral)} focos",
-                       font=dict(color=COLOR_ALTO, size=12), xanchor="left")
 
-    etiqueta = "RIESGO ALTO" if es_alto else "RIESGO BAJO"
-    color_txt = COLOR_ALTO if es_alto else COLOR_BAJO
-    fig.add_annotation(x=0.02, y=0.95, xref="paper", yref="paper",
-                       showarrow=False, xanchor="left", yanchor="top",
-                       text=f"zona estimada: <b>{etiqueta}</b>",
-                       font=dict(color=color_txt, size=13))
+    if n_focos_real is not None and n_focos_real > 0:
+        log_real = math.log10(n_focos_real)
+        fig.add_vline(x=log_real, line_dash="solid", line_color=COLOR_TEXTO,
+                      line_width=2)
 
     ticks = [1, 10, 100, 1000]
     fig.update_xaxes(
@@ -351,6 +536,202 @@ def grafico_importancias(meta: dict[str, Any]) -> go.Figure:
                      gridcolor="rgba(255,255,255,0.06)")
     fig.update_yaxes(gridcolor="rgba(255,255,255,0.0)")
     return _layout_oscuro(fig, altura=320)
+
+
+def grafico_contribuciones(contribs: dict[str, float], meta: dict[str, Any]) -> go.Figure:
+    """Barras divergentes con la contribución de cada feature a ESTA predicción.
+
+    A diferencia de ``grafico_importancias`` (global, igual para cualquier
+    input), esto cambia con cada combinación de sliders: es la respuesta a
+    "¿qué pesó en este caso puntual?".
+
+    Args:
+        contribs: Salida de ``contribuciones_locales`` (log-odds por feature).
+        meta: Metadata del modelo (para las etiquetas legibles).
+
+    Returns:
+        Figura Plotly.
+    """
+    etiquetas = dict(meta["etiquetas"])
+    etiquetas[meta["feature_categorica"]] = "Cobertura vegetal"
+    items = sorted(contribs.items(), key=lambda kv: abs(kv[1]))
+    nombres = [etiquetas.get(k, k) for k, _ in items]
+    valores = [v for _, v in items]
+    colores = [COLOR_ALTO if v >= 0 else COLOR_BAJO for v in valores]
+
+    fig = go.Figure(go.Bar(
+        x=valores, y=nombres, orientation="h",
+        marker_color=colores, marker_line_width=0,
+        hovertemplate="%{y}: %{x:+.3f} (log-odds)<extra></extra>",
+    ))
+    fig.add_vline(x=0, line_color=COLOR_TENUE, line_width=1)
+    fig.update_xaxes(title_text="Contribución a esta predicción (log-odds)",
+                     gridcolor="rgba(255,255,255,0.06)")
+    fig.update_yaxes(gridcolor="rgba(255,255,255,0.0)")
+    return _layout_oscuro(fig, altura=320)
+
+
+# ---------------------------------------------------------------------------
+# Mapa H3 interactivo (pydeck)
+# ---------------------------------------------------------------------------
+def _hex_a_rgb(color_hex: str) -> tuple[int, int, int]:
+    """Convierte ``"#RRGGBB"`` a una tupla ``(r, g, b)``."""
+    color_hex = color_hex.lstrip("#")
+    return tuple(int(color_hex[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _interpolar_rgb(
+    c0: tuple[int, int, int], c1: tuple[int, int, int], t: float
+) -> list[int]:
+    """Interpola linealmente entre dos colores RGB en ``t ∈ [0, 1]``."""
+    return [int(c0[i] + (c1[i] - c0[i]) * t) for i in range(3)]
+
+
+def colores_por_probabilidad(prob: pd.Series) -> list[list[int]]:
+    """Gradiente verde→rojo por probabilidad estimada (out-of-fold), 0 a 1.
+
+    Misma paleta que el resto de la app (``COLOR_BAJO`` → ``COLOR_ALTO``), para
+    que "riesgo alto" signifique el mismo color en el mapa, el gauge y los KPIs.
+    """
+    c0, c1 = _hex_a_rgb(COLOR_BAJO), _hex_a_rgb(COLOR_ALTO)
+    t = prob.clip(0, 1)
+    return [[*_interpolar_rgb(c0, c1, v), 190] for v in t]
+
+
+def colores_por_focos(n_focos: pd.Series) -> list[list[int]]:
+    """Gradiente crema→naranja→marrón por ``n_focos`` en escala logarítmica.
+
+    Misma paleta y misma razón que en
+    ``knime/presentacion/generar_mapa_h3.py``: la distribución de focos está
+    muy sesgada, así que el log resalta el gradiente real de actividad.
+    """
+    c0 = _hex_a_rgb(COLOR_FOCOS_CLARO)
+    c1 = _hex_a_rgb(COLOR_FOCOS_MEDIO)
+    c2 = _hex_a_rgb(COLOR_FOCOS_OSCURO)
+    log_f = np.log10(n_focos.clip(lower=1))
+    rango = log_f.max() - log_f.min()
+    t = ((log_f - log_f.min()) / rango) if rango > 0 else log_f * 0
+    colores = []
+    for v in t.fillna(0.0):
+        if v < 0.5:
+            colores.append([*_interpolar_rgb(c0, c1, v / 0.5), 190])
+        else:
+            colores.append([*_interpolar_rgb(c1, c2, (v - 0.5) / 0.5), 190])
+    return colores
+
+
+def colores_por_confusion(
+    df: pd.DataFrame, umbral: float
+) -> tuple[list[list[int]], pd.Series]:
+    """Colorea cada hexágono según el tipo de acierto/error del modelo.
+
+    Compara ``proba_oof >= umbral`` (lo que el modelo habría dicho, honesto,
+    sin haber visto ese hexágono en entrenamiento) contra ``riesgo_alto``
+    observado. Es la vista más defendible del mapa: hace **geográfica** la
+    precisión de 0.46 en vez de dejarla como un número suelto en una tabla.
+
+    Args:
+        df: Tablero de hexágonos con ``proba_oof`` y ``riesgo_alto``.
+        umbral: Umbral de decisión.
+
+    Returns:
+        Tupla ``(colores, categoria)``: lista de colores RGBA y la serie de
+        categorías (``"VP"``, ``"FN"``, ``"FP"``, ``"VN"``).
+    """
+    pred_alto = df["proba_oof"] >= umbral
+    obs_alto = df["riesgo_alto"].astype(bool)
+    categoria = pd.Series(
+        np.select(
+            [obs_alto & pred_alto, obs_alto & ~pred_alto, ~obs_alto & pred_alto],
+            ["VP", "FN", "FP"], default="VN",
+        ),
+        index=df.index,
+    )
+    paleta = {
+        "VP": [*_hex_a_rgb(COLOR_ALTO), 210],
+        "FN": [*_hex_a_rgb(COLOR_FN), 210],
+        "FP": [*_hex_a_rgb(COLOR_FP), 210],
+        "VN": [*_hex_a_rgb(COLOR_VN), 140],
+    }
+    return [paleta[c] for c in categoria], categoria
+
+
+VISTAS_MAPA = {
+    "Probabilidad estimada": (
+        "Verde = baja probabilidad estimada · rojo = alta. Probabilidad "
+        "**out-of-fold** (honesta): no es la del modelo de producción, que ya "
+        "vio estos hexágonos al entrenar."
+    ),
+    "Focos observados": (
+        "Escala logarítmica: crema = pocos focos históricos (2012–2023) · "
+        "marrón = muchos."
+    ),
+    "Aciertos y errores": (
+        "Rojo = acierto en riesgo alto · violeta = riesgo alto no detectado "
+        "(el error más costoso) · ámbar = falsa alarma · gris = acierto en "
+        "riesgo bajo."
+    ),
+}
+
+
+def grafico_mapa_hexagonos(
+    df: pd.DataFrame, vista: str, umbral: float, hex_resaltado: str | None
+) -> pdk.Deck:
+    """Arma el ``pdk.Deck`` del mapa H3 según la vista elegida.
+
+    Args:
+        df: Tablero de hexágonos completo.
+        vista: Una de las claves de ``VISTAS_MAPA``.
+        umbral: Umbral de decisión (para la vista de aciertos/errores).
+        hex_resaltado: Id del hexágono actualmente cargado en los sliders (se
+            dibuja con un borde resaltado), o ``None``.
+
+    Returns:
+        ``pdk.Deck`` listo para ``st.pydeck_chart``.
+    """
+    d = df.copy()
+    if vista == "Focos observados":
+        d["color"] = colores_por_focos(d["n_focos"])
+    elif vista == "Aciertos y errores":
+        d["color"], _ = colores_por_confusion(d, umbral)
+    else:
+        d["color"] = colores_por_probabilidad(d["proba_oof"])
+
+    d["prob_pct"] = (d["proba_oof"] * 100).round(1).astype(str) + " %"
+    d["n_focos_str"] = d["n_focos"].round().astype(int).astype(str)
+    d["clase_obs"] = np.where(d["riesgo_alto"] == 1,
+                              "ALTO (observado)", "BAJO (observado)")
+
+    capas = [pdk.Layer(
+        "H3HexagonLayer", data=d, get_hexagon="hex", get_fill_color="color",
+        get_line_color=[11, 17, 32], line_width_min_pixels=0.5,
+        pickable=True, auto_highlight=True,
+        highlight_color=[255, 255, 255, 90], id="hexagonos",
+    )]
+    if hex_resaltado:
+        resaltado = d[d["hex"] == hex_resaltado]
+        if not resaltado.empty:
+            capas.append(pdk.Layer(
+                "H3HexagonLayer", data=resaltado, get_hexagon="hex",
+                get_fill_color=[0, 0, 0, 0], get_line_color=[255, 255, 255, 255],
+                line_width_min_pixels=3, stroked=True, filled=False,
+                pickable=False, id="seleccionado",
+            ))
+
+    vista_inicial = pdk.ViewState(
+        latitude=float(df["lat"].mean()), longitude=float(df["lon"].mean()),
+        zoom=4.0, pitch=0,
+    )
+    return pdk.Deck(
+        layers=capas, initial_view_state=vista_inicial,
+        map_provider="carto", map_style="dark",
+        tooltip={
+            "html": "<b>{hex}</b><br/>Focos históricos: {n_focos_str}<br/>"
+                    "Prob. estimada (OOF): {prob_pct}<br/>Observado: {clase_obs}",
+            "style": {"backgroundColor": COLOR_PANEL, "color": COLOR_TEXTO,
+                      "fontSize": "12px"},
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -420,7 +801,8 @@ def main() -> None:
                        layout="wide")
     inyectar_estilos()
 
-    if not RUTA_MODELO.exists() or not RUTA_METADATA.exists():
+    if (not RUTA_MODELO.exists() or not RUTA_METADATA.exists()
+            or not RUTA_HEXAGONOS.exists()):
         st.error(
             "No se encontraron los artefactos del modelo en `app/models/`. "
             "Ejecutá primero el notebook `notebooks/09_serializacion_tp4.ipynb`."
@@ -429,12 +811,24 @@ def main() -> None:
 
     modelo = cargar_modelo(RUTA_MODELO)
     meta = cargar_metadata(RUTA_METADATA)
+    hexagonos = cargar_hexagonos(RUTA_HEXAGONOS)
+    umbral = float(meta["umbral_decision"])
+    met = meta["metricas"]
+
+    # --- Sincronizar la selección del mapa con los sliders, ANTES de dibujar
+    #     la barra lateral: Streamlit no permite reasignar el estado de un
+    #     widget con `key` después de haberlo instanciado en el mismo run. ---
+    fila_sel = hexagono_seleccionado()
+    sel_id = fila_sel["hex"] if fila_sel is not None else None
+    if sel_id is not None and sel_id != st.session_state.get("_hex_procesado"):
+        sincronizar_seleccion(meta, fila_sel)
+        st.session_state["_hex_procesado"] = sel_id
+        st.session_state["_mostrando_hex"] = True
 
     # --- Entrada (barra lateral) ---
-    entrada = recoger_entradas(meta)
+    entrada = recoger_entradas(meta, hexagonos)
 
     # --- Predicción (lógica intacta respecto del diseño anterior) ---
-    umbral = float(meta["umbral_decision"])
     prob = float(modelo.predict_proba(entrada)[:, 1][0])
     es_alto = prob >= umbral
     color_res = COLOR_ALTO if es_alto else COLOR_BAJO
@@ -465,6 +859,24 @@ def main() -> None:
             f"**no** el riesgo de incendio de un día concreto."
         )
 
+    # === Mapa de hexágonos ===
+    st.markdown('<div class="seccion">Mapa de hexágonos</div>',
+                unsafe_allow_html=True)
+    vista = st.radio(
+        "Colorear por", list(VISTAS_MAPA), horizontal=True,
+        label_visibility="collapsed",
+    )
+    deck = grafico_mapa_hexagonos(
+        hexagonos, vista, umbral, st.session_state.get("_hex_procesado"))
+    st.pydeck_chart(deck, on_select="rerun", selection_mode="single-object",
+                    key="mapa_hex", height=430)
+    st.caption(
+        VISTAS_MAPA[vista] + " Hacé clic en un hexágono para cargar sus "
+        "condiciones reales en los sliders de la izquierda."
+    )
+
+    st.write("")
+
     # === Fila de KPIs ===
     k1, k2, k3, k4 = st.columns(4)
     k1.markdown(
@@ -476,8 +888,11 @@ def main() -> None:
                     "de riesgo alto", color=COLOR_TEXTO),
         unsafe_allow_html=True)
     k3.markdown(
-        tarjeta_kpi("Umbral de decisión", f"{umbral:.3f}",
-                    "recall ≈ 0.72 (prioriza detección)", color=COLOR_TEXTO),
+        tarjeta_kpi(
+            "Umbral de decisión", f"{umbral:.3f}",
+            f"recall {met['recall_en_umbral']:.2f} · precisión "
+            f"{met['precision_en_umbral']:.2f}",
+            color=COLOR_TEXTO),
         unsafe_allow_html=True)
     badge = (("ATÍPICO", "badge-warn") if atipico else ("OK", "badge-ok"))
     k4.markdown(
@@ -488,24 +903,69 @@ def main() -> None:
     st.write("")
 
     # === Fila 2: gauge + histograma de contexto ===
+    # Si el hexágono actual viene de un click en el mapa, tenemos su n_focos
+    # observado y podemos marcarlo en el histograma. Si son sliders manuales
+    # (combinación hipotética), no existe un n_focos real que marcar.
+    n_focos_real = None
+    if st.session_state.get("_mostrando_hex"):
+        fila_hex_actual = hexagonos.loc[
+            hexagonos["hex"] == st.session_state.get("_hex_procesado")]
+        if not fila_hex_actual.empty:
+            n_focos_real = float(fila_hex_actual["n_focos"].iloc[0])
+
     c1, c2 = st.columns(2)
     with c1:
         st.markdown('<div class="seccion">Probabilidad</div>',
                     unsafe_allow_html=True)
         st.plotly_chart(grafico_gauge(prob, umbral, es_alto),
                         use_container_width=True)
+        st.caption(f"Umbral de decisión: {umbral * 100:.1f} %  ·  verde por "
+                   f"debajo, rojo por encima.")
     with c2:
         st.markdown('<div class="seccion">Contexto histórico</div>',
                     unsafe_allow_html=True)
-        st.plotly_chart(grafico_histograma_focos(meta, es_alto),
+        st.plotly_chart(grafico_histograma_focos(meta, es_alto, n_focos_real),
                         use_container_width=True)
+        etiqueta_zona = "RIESGO ALTO" if es_alto else "RIESGO BAJO"
+        umbral_focos = int(meta["umbral_riesgo_focos"])
+        leyenda = (
+            f"Distribución histórica <b>fija</b> (no cambia con los sliders) "
+            f"· línea punteada roja: umbral de {umbral_focos} focos · franja "
+            f"sombreada: lado del umbral de la <b style='color:{color_res}'>"
+            f"{etiqueta_zona}</b> estimada"
+        )
+        if n_focos_real is not None:
+            leyenda += (
+                f" · línea sólida blanca: focos <b>observados</b> de este "
+                f"hexágono ({int(round(n_focos_real))})"
+            )
+        st.markdown(f"<span class='kpi-sub'>{leyenda}.</span>",
+                    unsafe_allow_html=True)
 
-    # === Fila 3: importancias + interpretación ===
+    # === Fila 3: explicación local (SHAP) + interpretación ===
     c3, c4 = st.columns(2)
     with c3:
-        st.markdown('<div class="seccion">Qué pesa en la estimación</div>',
+        st.markdown('<div class="seccion">Por qué esta estimación</div>',
                     unsafe_allow_html=True)
-        st.plotly_chart(grafico_importancias(meta), use_container_width=True)
+        contribs, base_value = contribuciones_locales(entrada, modelo, meta)
+        st.plotly_chart(grafico_contribuciones(contribs, meta),
+                        use_container_width=True)
+        suma_contribs = sum(contribs.values())
+        logit = base_value + suma_contribs
+        prob_verificada = 1.0 / (1.0 + math.exp(-logit))
+        st.caption(
+            f"Contribuciones en log-odds (TreeSHAP exacto de XGBoost, no una "
+            f"aproximación). Verificación: base ({base_value:+.3f}) + Σ "
+            f"contribuciones ({suma_contribs:+.3f}) = {logit:+.3f} → sigmoide "
+            f"= {prob_verificada * 100:.1f} %, igual a la probabilidad de arriba."
+        )
+        with st.expander("Ver importancia global del modelo"):
+            st.caption(
+                "A diferencia del gráfico de arriba, esto es fijo: no cambia "
+                "al mover los sliders. Resume qué pesa el modelo **en "
+                "promedio**, sobre todas las predicciones."
+            )
+            st.plotly_chart(grafico_importancias(meta), use_container_width=True)
     with c4:
         st.markdown('<div class="seccion">Interpretación</div>',
                     unsafe_allow_html=True)
@@ -534,7 +994,6 @@ def main() -> None:
                 unsafe_allow_html=True,
             )
 
-        met = meta["metricas"]
         st.markdown("<div class='seccion' style='margin-top:1rem'>Métricas de "
                     "referencia</div>", unsafe_allow_html=True)
         st.markdown(
@@ -559,6 +1018,11 @@ def main() -> None:
             "- **Zona de *flaring* excluida.** Se removió el cuadrante de Vaca "
             "Muerta, donde la señal térmica corresponde a **quema de gas**, no "
             "a incendios.\n"
+            "- **Probabilidades del mapa, out-of-fold.** El color de cada "
+            "hexágono en el mapa sale de validación cruzada (5 folds), no del "
+            "modelo de producción (reentrenado con el 100 % de los datos). Al "
+            "hacer clic en un hexágono, la probabilidad del gauge puede diferir "
+            "levemente de la del mapa: es esperable, no un error.\n"
             "- **No es un sistema operativo de alerta.** Es un trabajo "
             "académico (TP4): no incorpora meteorología en tiempo real, "
             "combustible actual ni ignición humana inmediata, y **no debe "
